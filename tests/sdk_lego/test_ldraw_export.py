@@ -10,6 +10,12 @@ from sdk_lego import ArticulatedObject, Origin, ValidationError
 from sdk_lego.ldraw_export import compile_object_to_ldraw_mpd
 
 
+@pytest.fixture(autouse=True)
+def _offline_lego_catalog(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("REBRICKABLE_API_KEY", raising=False)
+    monkeypatch.setenv("ARTICRAFT_LEGO_CACHE_DIR", str(tmp_path / "rebrickable"))
+
+
 def _stacked_model() -> ArticulatedObject:
     model = ArticulatedObject(name="lego_stack")
     lower = model.part("lower", part_num="3001", color="red", origin=Origin())
@@ -119,8 +125,7 @@ object_model = build_object_model()
     assert report.warnings == []
 
 
-def test_find_examples_uses_lego_catalog_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("REBRICKABLE_API_KEY", raising=False)
+def test_find_examples_uses_lego_catalog_fallback() -> None:
     invocation = FindExamplesInvocation(
         FindExamplesParams(query="brick 2 x 4", limit=2),
         sdk_package="sdk_lego",
