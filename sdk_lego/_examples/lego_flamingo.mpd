@@ -1,0 +1,33 @@
+0 FILE lego_flamingo.ldr
+0 lego_flamingo
+0 !ARTICRAFT_FORMAT LEGO_LDRAW_MPD 1
+0 !ARTICRAFT_SIDECAR_BEGIN
+0 !ARTICRAFT_SIDECAR {"articulations":[],"connections":[{"child":"legs","child_connector":"antistud_0_0","connection_type":"fixed","parent":"feet","parent_connector":"stud_0_0"},{"child":"body","child_connector":"antistud_0_0","connection_type":"fixed","parent"
+0 !ARTICRAFT_SIDECAR :"legs","parent_connector":"stud_0_0"},{"child":"neck_lower","child_connector":"antistud_0_0","connection_type":"fixed","parent":"body","parent_connector":"stud_0_0"},{"child":"neck_upper","child_connector":"antistud_0_0","connection_type":
+0 !ARTICRAFT_SIDECAR "fixed","parent":"neck_lower","parent_connector":"stud_0_0"},{"child":"head","child_connector":"antistud_0_0","connection_type":"fixed","parent":"neck_upper","parent_connector":"stud_0_0"},{"child":"beak","child_connector":"antistud_0_0","c
+0 !ARTICRAFT_SIDECAR onnection_type":"fixed","parent":"head","parent_connector":"stud_0_0"}],"format":"articraft_lego_ldraw_sidecar","name":"lego_flamingo","pieces":[{"color_id":0,"color_name":"Black","connectors":[{"axis":[0.0,-1.0,0.0],"id":"stud_0_0","positi
+0 !ARTICRAFT_SIDECAR on_ldu":[-10.0,-8.0,-10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_0","position_ldu":[-10.0,0.0,-10.0],"type":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_0_1","position_ldu":[-10.0,-8.0,10.0],"type":"stud"},{"axis":[0.0,1.0,
+0 !ARTICRAFT_SIDECAR 0.0],"id":"antistud_0_1","position_ldu":[-10.0,0.0,10.0],"type":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_1_0","position_ldu":[10.0,-8.0,-10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_1_0","position_ldu":[10.0,0.0,-10.0],"ty
+0 !ARTICRAFT_SIDECAR pe":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_1_1","position_ldu":[10.0,-8.0,10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_1_1","position_ldu":[10.0,0.0,10.0],"type":"antistud"}],"ldraw_id":"3022.dat","name":"feet","origin":
+0 !ARTICRAFT_SIDECAR {"rpy":[0.0,0.0,0.0],"xyz":[0.0,0.0,0.0]},"part_num":"3022"},{"color_id":5,"color_name":"Dark Pink","connectors":[{"axis":[0.0,-1.0,0.0],"id":"stud_0_0","position_ldu":[-10.0,-24.0,-10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_
+0 !ARTICRAFT_SIDECAR 0_0","position_ldu":[-10.0,0.0,-10.0],"type":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_0_1","position_ldu":[-10.0,-24.0,10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_1","position_ldu":[-10.0,0.0,10.0],"type":"antistud"},{"
+0 !ARTICRAFT_SIDECAR axis":[0.0,-1.0,0.0],"id":"stud_1_0","position_ldu":[10.0,-24.0,-10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_1_0","position_ldu":[10.0,0.0,-10.0],"type":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_1_1","position_ldu":[10.0,-
+0 !ARTICRAFT_SIDECAR 24.0,10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_1_1","position_ldu":[10.0,0.0,10.0],"type":"antistud"}],"ldraw_id":"3003.dat","name":"legs","origin":{"rpy":[0.0,0.0,0.0],"xyz":[0.0,0.0,0.0032]},"part_num":"3003"},{"color_id":
+0 !ARTICRAFT_SIDECAR 5,"color_name":"Dark Pink","connectors":[{"axis":[0.0,-1.0,0.0],"id":"stud_0_0","position_ldu":[-10.0,-24.0,-10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_0","position_ldu":[-10.0,0.0,-10.0],"type":"antistud"},{"axis":[0.0,-1.
+0 !ARTICRAFT_SIDECAR 0,0.0],"id":"stud_0_1","position_ldu":[-10.0,-24.0,10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_1","position_ldu":[-10.0,0.0,10.0],"type":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_1_0","position_ldu":[10.0,-24.0,-10.0],"t
+0 !ARTICRAFT_SIDECAR ype":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_1_0","position_ldu":[10.0,0.0,-10.0],"type":"antistud"},{"axis":[0.0,-1.0,0.0],"id":"stud_1_1","position_ldu":[10.0,-24.0,10.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_1_1","posi
+0 !ARTICRAFT_SIDECAR tion_ldu":[10.0,0.0,10.0],"type":"antistud"}],"ldraw_id":"3003.dat","name":"body","origin":{"rpy":[0.0,0.0,0.0],"xyz":[0.0,0.0,0.012799999999999999]},"part_num":"3003"},{"color_id":5,"color_name":"Dark Pink","connectors":[{"axis":[0.0,-1.0,
+0 !ARTICRAFT_SIDECAR 0.0],"id":"stud_0_0","position_ldu":[0.0,-24.0,0.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_0","position_ldu":[0.0,0.0,0.0],"type":"antistud"}],"ldraw_id":"3005.dat","name":"neck_lower","origin":{"rpy":[0.0,0.0,0.0],"xyz":[0.0
+0 !ARTICRAFT_SIDECAR ,0.0,0.0224]},"part_num":"3005"},{"color_id":5,"color_name":"Dark Pink","connectors":[{"axis":[0.0,-1.0,0.0],"id":"stud_0_0","position_ldu":[0.0,-24.0,0.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_0","position_ldu":[0.0,0.0,0.0
+0 !ARTICRAFT_SIDECAR ],"type":"antistud"}],"ldraw_id":"3005.dat","name":"neck_upper","origin":{"rpy":[0.0,0.0,0.0],"xyz":[0.0,0.0,0.032]},"part_num":"3005"},{"color_id":5,"color_name":"Dark Pink","connectors":[{"axis":[0.0,-1.0,0.0],"id":"stud_0_0","position_ld
+0 !ARTICRAFT_SIDECAR u":[0.0,-24.0,0.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_0","position_ldu":[0.0,0.0,0.0],"type":"antistud"}],"ldraw_id":"30068.dat","name":"head","origin":{"rpy":[0.0,0.0,0.0],"xyz":[0.0,0.0,0.0416]},"part_num":"3062b"},{"co
+0 !ARTICRAFT_SIDECAR lor_id":0,"color_name":"Black","connectors":[{"axis":[0.0,-1.0,0.0],"id":"stud_0_0","position_ldu":[0.0,-8.0,0.0],"type":"stud"},{"axis":[0.0,1.0,0.0],"id":"antistud_0_0","position_ldu":[0.0,0.0,0.0],"type":"antistud"}],"ldraw_id":"3024.dat
+0 !ARTICRAFT_SIDECAR ","name":"beak","origin":{"rpy":[0.0,0.0,0.0],"xyz":[0.0,0.0,0.051199999999999996]},"part_num":"3024"}],"schema_version":1,"target":"buildable"}
+0 !ARTICRAFT_SIDECAR_END
+1 0 0 0 0 1 0 0 0 1 0 0 0 1 3022.dat
+1 5 0 -8 0 1 0 0 0 1 0 0 0 1 3003.dat
+1 5 0 -32 0 1 0 0 0 1 0 0 0 1 3003.dat
+1 5 0 -56 0 1 0 0 0 1 0 0 0 1 3005.dat
+1 5 0 -80 0 1 0 0 0 1 0 0 0 1 3005.dat
+1 5 0 -104 0 1 0 0 0 1 0 0 0 1 30068.dat
+1 0 0 -128 0 1 0 0 0 1 0 0 0 1 3024.dat
