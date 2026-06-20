@@ -44,12 +44,46 @@ class FindExamplesInvocation(BaseToolInvocation[FindExamplesParams, list[dict[st
         if self.params.limit < 1:
             return ToolResult(error="limit must be >= 1")
 
+        if self.sdk_package == "sdk_lego":
+            from sdk_lego import find_lego_parts
+
+            matches = find_lego_parts(query, limit=self.params.limit)
+            return ToolResult(output=[self._serialize_lego_part(part) for part in matches])
+
         matches = search_example_documents(
             query,
             sdk_package=self.sdk_package,
             limit=self.params.limit,
         )
         return ToolResult(output=[self._serialize_match(doc) for doc in matches])
+
+    def _serialize_lego_part(self, part: Any) -> dict[str, object]:
+        ldraw_ids = list(getattr(part, "ldraw_ids", ()) or ())
+        content = (
+            f"LEGO catalog part {part.part_num}: {part.name}\n"
+            f"- Rebrickable part_num: {part.part_num}\n"
+            f"- LDraw IDs: {', '.join(ldraw_ids) if ldraw_ids else part.part_num}\n"
+            f"- Suggested LDraw file: {part.ldraw_filename}\n"
+            f"- Nominal stud footprint: {part.nominal_size or 'unknown'}\n"
+            "- Use with sdk_lego.ArticulatedObject.part(...)."
+        )
+        result: dict[str, object] = {
+            "example_id": f"lego_part:{part.part_num}",
+            "title": part.name,
+            "description": f"LEGO catalog part {part.part_num}",
+            "tags": ["lego", "part", str(getattr(part, "part_cat_id", "") or "unknown")],
+            "content": content,
+            "match_quality": "catalog",
+            "matched_tokens": [],
+            "matched_fields": ["rebrickable_catalog"],
+            "part_num": part.part_num,
+            "ldraw_ids": ldraw_ids,
+            "ldraw_filename": part.ldraw_filename,
+            "nominal_size": part.nominal_size,
+        }
+        if self.include_paths:
+            result["path"] = f"rebrickable://lego/parts/{part.part_num}"
+        return result
 
     def _serialize_match(self, doc: Any) -> dict[str, object]:
         relative_path = doc.path.relative_to(Path(__file__).resolve().parents[2]).as_posix()

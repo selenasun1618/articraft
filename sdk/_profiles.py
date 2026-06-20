@@ -87,7 +87,9 @@ _CADQUERY_DOCS = (
 _SDK_PACKAGE_ALIASES = {
     "": "sdk",
     "base": "sdk",
+    "lego": "sdk_lego",
     "sdk": "sdk",
+    "sdk_lego": "sdk_lego",
 }
 
 
@@ -101,6 +103,22 @@ SDK_PROFILES: dict[str, SdkProfile] = {
             Path("sdk/_docs/cadquery/35_cadquery.md"),
             Path("sdk/_docs/common/70_probe_tooling.md"),
             Path("sdk/_docs/common/80_testing.md"),
+        ),
+        openai_prompt_name=OPENAI_DESIGNER_PROMPT_NAME,
+        gemini_prompt_name=GEMINI_DESIGNER_PROMPT_NAME,
+        openrouter_prompt_name=OPENROUTER_DESIGNER_PROMPT_NAME,
+        anthropic_prompt_name=ANTHROPIC_DESIGNER_PROMPT_NAME,
+    ),
+    "sdk_lego": SdkProfile(
+        package_name="sdk_lego",
+        scaffold_path=Path("sdk_lego/scaffold.py"),
+        docs_full=(
+            Path("sdk_lego/_docs/00_quickstart.md"),
+            Path("sdk_lego/_docs/10_parts_and_connections.md"),
+        ),
+        docs_core=(
+            Path("sdk_lego/_docs/00_quickstart.md"),
+            Path("sdk_lego/_docs/10_parts_and_connections.md"),
         ),
         openai_prompt_name=OPENAI_DESIGNER_PROMPT_NAME,
         gemini_prompt_name=GEMINI_DESIGNER_PROMPT_NAME,

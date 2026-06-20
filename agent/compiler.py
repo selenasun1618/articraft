@@ -25,7 +25,8 @@ from sdk._core.v0.assets import activate_asset_session, asset_session_for_script
 
 logger = logging.getLogger(__name__)
 
-_COMPILE_TARGETS = {"full", "visual"}
+_COMPILE_TARGETS = {"full", "visual", "buildable", "strict"}
+_LEGO_SDK_PACKAGES = {"lego", "sdk_lego"}
 
 _EXCEPTION_PREFIX_RE = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)):\s*")
 _VISUAL_OBJ_MESH_RE = re.compile(
@@ -107,6 +108,17 @@ def _normalize_compile_target(target: str) -> str:
     if target_key not in _COMPILE_TARGETS:
         supported = ", ".join(sorted(_COMPILE_TARGETS))
         raise ValueError(f"Unsupported compile target {target!r}. Expected one of: {supported}")
+    return target_key
+
+
+def _is_lego_sdk_package(sdk_package: str) -> bool:
+    return str(sdk_package or "").strip().lower() in _LEGO_SDK_PACKAGES
+
+
+def _normalize_lego_compile_target(target: str) -> str:
+    target_key = _normalize_compile_target(target)
+    if target_key == "full":
+        return "buildable"
     return target_key
 
 
@@ -215,6 +227,13 @@ def compile_urdf_report(
     target: str = "full",
     rewrite_visual_glb: bool | None = None,
 ) -> CompileReport:
+    if _is_lego_sdk_package(sdk_package):
+        return compile_ldraw_report(
+            script_path,
+            sdk_package=sdk_package,
+            run_checks=run_checks,
+            target=target,
+        )
     session = asset_session_for_script(script_path)
     with activate_asset_session(session):
         return _compile_urdf_report_impl(
@@ -225,6 +244,35 @@ def compile_urdf_report(
             target=target,
             rewrite_visual_glb=rewrite_visual_glb,
         )
+
+
+def compile_ldraw_report(
+    script_path: Path,
+    *,
+    sdk_package: str = "sdk_lego",
+    run_checks: bool = True,
+    target: str = "buildable",
+) -> CompileReport:
+    globals_dict = load_model_globals(script_path, sdk_package=sdk_package)
+    object_model = globals_dict.get("object_model")
+    if object_model is None:
+        raise ValueError("object_model must be defined for LEGO LDraw compile")
+    compile_object_to_ldraw_mpd = getattr(
+        _import_sdk_module(sdk_package, ".ldraw_export"),
+        "compile_object_to_ldraw_mpd",
+    )
+    export = compile_object_to_ldraw_mpd(
+        object_model,
+        target=_normalize_lego_compile_target(target),
+        validate=run_checks,
+    )
+    warnings = [str(warning) for warning in getattr(export, "warnings", [])]
+    signal_bundle = build_compile_signal_bundle(status="success", warnings=warnings)
+    return CompileReport(
+        urdf_xml=str(getattr(export, "mpd_text")),
+        warnings=warnings,
+        signal_bundle=signal_bundle,
+    )
 
 
 def _compile_urdf_report_impl(
