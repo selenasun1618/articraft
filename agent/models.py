@@ -26,6 +26,10 @@ class AgentResult:
     conversation: list[dict[str, Any]]
     final_code: str | None = None
     urdf_xml: str | None = None
+    compile_output_text: str | None = None
+    compile_artifact_format: str = "urdf"
+    compile_artifact_filename: str = "model.urdf"
+    compile_sidecar_json: dict[str, Any] | None = None
     compile_warnings: list[str] = field(default_factory=list)
     turn_count: int = 0
     tool_call_count: int = 0
@@ -115,6 +119,17 @@ class CompileReport:
     urdf_xml: str
     warnings: list[str]
     signal_bundle: CompileSignalBundle
+    artifact_format: str = "urdf"
+    artifact_filename: str = "model.urdf"
+    sidecar_json: dict[str, Any] | None = None
+
+    @property
+    def output_text(self) -> str:
+        return self.urdf_xml
+
+    @property
+    def is_urdf(self) -> bool:
+        return self.artifact_format == "urdf"
 
 
 @dataclass(slots=True, frozen=True)

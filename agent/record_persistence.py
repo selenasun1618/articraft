@@ -342,6 +342,9 @@ class SuccessRecordWrite:
     final_code: str
     urdf_xml: str
     compile_warnings: list[str]
+    artifact_format: str
+    artifact_filename: str
+    sidecar_json: dict[str, Any] | None
     turn_count: int
     tool_call_count: int
     compile_attempt_count: int
@@ -614,6 +617,9 @@ def write_success_record(
     final_code = request.final_code
     urdf_xml = request.urdf_xml
     compile_warnings = request.compile_warnings
+    artifact_format = request.artifact_format or "urdf"
+    artifact_filename = Path(request.artifact_filename or "model.urdf").name
+    sidecar_json = request.sidecar_json
     turn_count = request.turn_count
     tool_call_count = request.tool_call_count
     compile_attempt_count = request.compile_attempt_count
@@ -638,12 +644,13 @@ def write_success_record(
 
     materializations = MaterializationStore(storage_repo)
     persisted_warnings = list(compile_warnings)
-    persisted_urdf_xml = urdf_xml
-    if _should_rewrite_visual_meshes_to_glb(
+    persisted_output_text = urdf_xml
+    is_urdf_artifact = artifact_format == "urdf"
+    if is_urdf_artifact and _should_rewrite_visual_meshes_to_glb(
         sdk_package=sdk_package,
         rewrite_visual_glb=None,
     ):
-        persisted_urdf_xml = rewrite_visual_meshes_to_glb(
+        persisted_output_text = rewrite_visual_meshes_to_glb(
             urdf_xml,
             sdk_package=sdk_package,
             asset_root=context.staging_dir,
@@ -653,13 +660,24 @@ def write_success_record(
     revision_id = validate_revision_id(context.revision_id)
     record_store.ensure_record_dirs(context.record_id)
     context.record_revision_dir.mkdir(parents=True, exist_ok=True)
-    referenced_assets = _referenced_materialization_assets(persisted_urdf_xml)
+    referenced_assets = (
+        _referenced_materialization_assets(persisted_output_text)
+        if is_urdf_artifact
+        else {"meshes": set(), "glb": set()}
+    )
+    artifact_path = storage_repo.layout.record_materialization_artifact_path(
+        context.record_id,
+        artifact_filename,
+    )
     storage_repo.write_text(context.record_prompt_path, prompt_text)
     storage_repo.write_text(context.record_model_path, final_code)
-    storage_repo.write_text(context.record_urdf_path, persisted_urdf_xml)
+    storage_repo.write_text(artifact_path, persisted_output_text)
+    if sidecar_json is not None:
+        sidecar_path = artifact_path.with_suffix(".sidecar.json")
+        storage_repo.write_json(sidecar_path, sidecar_json)
     system_prompt_sha = _ensure_shared_system_prompt(storage_repo, system_prompt_path)
 
-    for stale_file in ("model.urdf", "compile_report.json"):
+    for stale_file in ("model.urdf", "model.mpd", "model.sidecar.json", "compile_report.json"):
         stale_path = context.record_dir / stale_file
         if stale_path.exists():
             stale_path.unlink()
@@ -707,13 +725,17 @@ def write_success_record(
         schema_version=1,
         record_id=context.record_id,
         status="success",
-        urdf_path="model.urdf",
+        urdf_path="model.urdf" if is_urdf_artifact else artifact_filename,
+        artifact_path=artifact_filename,
+        artifact_format=artifact_format,
         warnings=[
             CompileWarning(code="warning", message=warning) for warning in persisted_warnings
         ],
-        checks_run=["compile_urdf"],
+        checks_run=["compile_urdf" if is_urdf_artifact else "compile_ldraw"],
         metrics={
             "compile_level": "full",
+            "artifact_format": artifact_format,
+            "artifact_path": artifact_filename,
             "turn_count": turn_count,
             "tool_call_count": tool_call_count,
             "compile_attempt_count": compile_attempt_count,

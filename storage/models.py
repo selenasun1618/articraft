@@ -217,6 +217,8 @@ class CompileReport:
     record_id: str
     status: str
     urdf_path: str
+    artifact_path: str | None = None
+    artifact_format: str = "urdf"
     warnings: list[CompileWarning] = field(default_factory=list)
     checks_run: list[str] = field(default_factory=list)
     overlap_allowances: list[dict[str, Any]] = field(default_factory=list)
@@ -229,6 +231,8 @@ class CompileReport:
             "record_id": self.record_id,
             "status": self.status,
             "urdf_path": self.urdf_path,
+            "artifact_path": self.artifact_path or self.urdf_path,
+            "artifact_format": self.artifact_format,
             "warnings": [warning.to_dict() for warning in self.warnings],
             "checks_run": list(self.checks_run),
             "overlap_allowances": list(self.overlap_allowances),

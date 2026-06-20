@@ -19,7 +19,7 @@ def _compile_level_from_report(report: dict[str, Any] | None) -> str | None:
     metrics = report.get("metrics")
     if isinstance(metrics, dict):
         value = metrics.get("compile_level")
-        if isinstance(value, str) and value in {"visual", "full"}:
+        if isinstance(value, str) and value in {"visual", "full", "buildable", "strict"}:
             return value
     return None
 
@@ -35,7 +35,11 @@ def _compile_report_satisfies_target(
     if target == "full":
         return level == "full"
     if target == "visual":
-        return level in {"visual", "full"}
+        return level in {"visual", "full", "buildable", "strict"}
+    if target == "buildable":
+        return level in {"buildable", "strict"}
+    if target == "strict":
+        return level == "strict"
     raise ValueError(f"Unsupported materialization target: {target!r}")
 
 

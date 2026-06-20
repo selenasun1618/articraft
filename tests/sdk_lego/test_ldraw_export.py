@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from agent.compiler import compile_urdf_report
-from agent.tools.find_examples import FindExamplesParams, FindExamplesInvocation
+from agent.tools.find_examples import FindExamplesInvocation, FindExamplesParams
 from sdk_lego import ArticulatedObject, Origin, ValidationError
 from sdk_lego.ldraw_export import compile_object_to_ldraw_mpd
 
@@ -120,8 +120,11 @@ object_model = build_object_model()
 
     report = compile_urdf_report(script, sdk_package="sdk_lego", target="strict")
 
-    assert report.urdf_xml.startswith("0 FILE lego_stack.ldr")
-    assert "3001.dat" in report.urdf_xml
+    assert report.artifact_format == "ldraw-mpd"
+    assert report.artifact_filename == "model.mpd"
+    assert report.output_text.startswith("0 FILE lego_stack.ldr")
+    assert "3001.dat" in report.output_text
+    assert report.sidecar_json is not None
     assert report.warnings == []
 
 

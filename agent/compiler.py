@@ -272,6 +272,9 @@ def compile_ldraw_report(
         urdf_xml=str(getattr(export, "mpd_text")),
         warnings=warnings,
         signal_bundle=signal_bundle,
+        artifact_format="ldraw-mpd",
+        artifact_filename="model.mpd",
+        sidecar_json=getattr(export, "sidecar_json", None),
     )
 
 
@@ -637,6 +640,10 @@ def _compile_worker(
         payload = {
             "ok": True,
             "urdf_xml": report.urdf_xml,
+            "output_text": report.output_text,
+            "artifact_format": report.artifact_format,
+            "artifact_filename": report.artifact_filename,
+            "sidecar_json": report.sidecar_json,
             "warnings": report.warnings,
             "signal_bundle": report.signal_bundle.to_dict(),
         }
@@ -737,10 +744,16 @@ def compile_urdf_report_maybe_timeout(
         )
     if msg.get("ok") is True:
         urdf_xml = msg.get("urdf_xml")
+        output_text = msg.get("output_text")
+        artifact_format = msg.get("artifact_format")
+        artifact_filename = msg.get("artifact_filename")
+        sidecar_json = msg.get("sidecar_json")
         warnings = msg.get("warnings")
         signal_bundle_payload = msg.get("signal_bundle")
+        if not isinstance(urdf_xml, str) and isinstance(output_text, str):
+            urdf_xml = output_text
         if not isinstance(urdf_xml, str):
-            raise RuntimeError("URDF compile failed: missing urdf_xml from worker")
+            raise RuntimeError("Compile failed: missing output text from worker")
         if not isinstance(warnings, list):
             warnings = []
         if isinstance(signal_bundle_payload, dict):
@@ -751,6 +764,11 @@ def compile_urdf_report_maybe_timeout(
             urdf_xml=urdf_xml,
             warnings=[str(w) for w in warnings],
             signal_bundle=signal_bundle,
+            artifact_format=str(artifact_format) if isinstance(artifact_format, str) else "urdf",
+            artifact_filename=(
+                str(artifact_filename) if isinstance(artifact_filename, str) else "model.urdf"
+            ),
+            sidecar_json=sidecar_json if isinstance(sidecar_json, dict) else None,
         )
 
     error_text = str(msg.get("error", "Unknown compile worker error")).strip()

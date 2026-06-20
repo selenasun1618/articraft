@@ -174,6 +174,7 @@ def materialization_paths(repo: StorageRepo, record_id: str) -> dict[str, Path]:
     return {
         "root": repo.layout.record_materialization_dir(record_id),
         "model_urdf": repo.layout.record_materialization_urdf_path(record_id),
+        "model_mpd": repo.layout.record_materialization_artifact_path(record_id, "model.mpd"),
         "compile_report_json": repo.layout.record_materialization_compile_report_path(record_id),
         "assets_dir": repo.layout.record_materialization_assets_dir(record_id),
         "meshes_dir": repo.layout.record_materialization_asset_meshes_dir(record_id),
@@ -238,6 +239,8 @@ def build_materialization_summary(repo: StorageRepo, record_id: str) -> dict[str
 
     if has_materialized_assets:
         materialization_status: MaterializationStatus = "available"
+    elif paths["model_mpd"].exists():
+        materialization_status = "available"
     elif paths["model_urdf"].exists() and not urdf_references_external_meshes(paths["model_urdf"]):
         materialization_status = "available"
     else:
@@ -281,5 +284,7 @@ def infer_materialization_status(
 
     urdf_path = repo.layout.record_materialization_urdf_path(record_id)
     if urdf_path.exists() and not urdf_references_external_meshes(urdf_path):
+        return "available"
+    if repo.layout.record_materialization_artifact_path(record_id, "model.mpd").exists():
         return "available"
     return "missing"
