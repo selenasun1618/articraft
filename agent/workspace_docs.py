@@ -195,6 +195,6 @@ _DOC_PATH_ALIASES = {
     "sdk/_docs/cadquery/39d_cadquery_gears.md": "references/cadquery/gears.md",
     "sdk/_docs/cadquery/39b_cadquery_free_function.md": "references/cadquery/free-functions.md",
     "sdk/_docs/cadquery/39c_cadquery_api_ref.md": "references/cadquery/api-ref.md",
-    "sdk_lego/_docs/00_quickstart.md": "lego/quickstart.md",
-    "sdk_lego/_docs/10_parts_and_connections.md": "lego/parts-and-connections.md",
+    "sdk_lego/_docs/00_quickstart.md": "references/quickstart.md",
+    "sdk_lego/_docs/10_parts_and_connections.md": "references/lego-parts-and-connections.md",
 }

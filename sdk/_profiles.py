@@ -115,10 +115,14 @@ SDK_PROFILES: dict[str, SdkProfile] = {
         docs_full=(
             Path("sdk_lego/_docs/00_quickstart.md"),
             Path("sdk_lego/_docs/10_parts_and_connections.md"),
+            Path("sdk/_docs/common/70_probe_tooling.md"),
+            Path("sdk/_docs/common/80_testing.md"),
         ),
         docs_core=(
             Path("sdk_lego/_docs/00_quickstart.md"),
             Path("sdk_lego/_docs/10_parts_and_connections.md"),
+            Path("sdk/_docs/common/70_probe_tooling.md"),
+            Path("sdk/_docs/common/80_testing.md"),
         ),
         openai_prompt_name=OPENAI_DESIGNER_PROMPT_NAME,
         gemini_prompt_name=GEMINI_DESIGNER_PROMPT_NAME,
