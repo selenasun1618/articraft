@@ -13,6 +13,7 @@ from sdk import ValidationError
 
 _REBRICKABLE_BASE_URL = "https://rebrickable.com/api/v3"
 _NAME_SIZE_RE = re.compile(r"\b(?P<x>\d+)\s*x\s*(?P<y>\d+)\b", re.IGNORECASE)
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
 _DEFAULT_CACHE_ROOT = Path("data/cache/lego/rebrickable")
 
 
@@ -198,6 +199,68 @@ def _record_from_payload(payload: dict[str, Any]) -> LegoPartRecord:
     )
 
 
+def _search_tokens(value: str) -> tuple[str, ...]:
+    normalized = value.lower().replace("×", "x")
+    return tuple(_TOKEN_RE.findall(normalized))
+
+
+def _search_phrase(value: str) -> str:
+    return " ".join(_search_tokens(value))
+
+
+def _part_search_score(record: LegoPartRecord, *, query: str) -> float:
+    query_phrase = _search_phrase(query)
+    query_tokens = _search_tokens(query)
+    if not query_tokens:
+        return 0.0
+
+    name_phrase = _search_phrase(record.name)
+    part_num_phrase = _search_phrase(record.part_num)
+    haystack = " ".join((part_num_phrase, name_phrase, *(_search_phrase(item) for item in record.ldraw_ids)))
+    haystack_tokens = set(_search_tokens(haystack))
+
+    score = 0.0
+    if query_phrase == part_num_phrase:
+        score += 200.0
+    if query_phrase == name_phrase:
+        score += 160.0
+    elif query_phrase and query_phrase in name_phrase:
+        score += 90.0
+
+    matched = sum(1 for token in query_tokens if token in haystack_tokens)
+    coverage = matched / max(len(query_tokens), 1)
+    score += coverage * 60.0
+    if matched == len(query_tokens):
+        score += 40.0
+
+    # Prefer unprinted/base shapes when the query does not ask for decoration.
+    lowered_name = record.name.lower()
+    if "print" in lowered_name or "pattern" in lowered_name or "sticker" in lowered_name:
+        score -= 12.0
+    if "pr" in record.part_num.lower() and "print" not in query_phrase:
+        score -= 8.0
+
+    # Small tie-break toward concise generic names over long decorated names.
+    score -= min(len(record.name), 120) / 1000.0
+    return score
+
+
+def _dedupe_ranked_parts(records: list[LegoPartRecord], *, query: str, limit: int) -> list[LegoPartRecord]:
+    best_by_part_num: dict[str, tuple[float, LegoPartRecord]] = {}
+    for record in records:
+        score = _part_search_score(record, query=query)
+        if score <= 0:
+            continue
+        current = best_by_part_num.get(record.part_num)
+        if current is None or score > current[0]:
+            best_by_part_num[record.part_num] = (score, record)
+    ranked = sorted(
+        best_by_part_num.values(),
+        key=lambda item: (-item[0], item[1].name.lower(), item[1].part_num),
+    )
+    return [record for _, record in ranked[:limit]]
+
+
 def resolve_lego_part(part_num: str) -> LegoPartRecord:
     key = str(part_num).strip()
     if not key:
@@ -221,6 +284,10 @@ def find_lego_parts(query: str, *, limit: int = 5) -> list[LegoPartRecord]:
     if not normalized_query:
         return []
     limit = max(1, int(limit))
+    candidate_records = list(_FALLBACK_PARTS.values())
+    if normalized_query in _FALLBACK_PARTS:
+        return [_FALLBACK_PARTS[normalized_query]][:limit]
+
     cached = _read_cached_json(_search_cache_path(normalized_query))
     payload: dict[str, Any] | None = cached
     if payload is None:
@@ -234,25 +301,18 @@ def find_lego_parts(query: str, *, limit: int = 5) -> list[LegoPartRecord]:
                 },
             )
         except Exception:
-            lowered = normalized_query.lower()
-            matches = [
-                record
-                for record in _FALLBACK_PARTS.values()
-                if lowered in record.name.lower() or lowered in record.part_num.lower()
-            ]
-            return matches[:limit]
+            return _dedupe_ranked_parts(candidate_records, query=normalized_query, limit=limit)
         _write_cached_json(_search_cache_path(normalized_query), payload)
     raw_results = payload.get("results")
     if not isinstance(raw_results, list):
-        return []
-    records: list[LegoPartRecord] = []
+        return _dedupe_ranked_parts(candidate_records, query=normalized_query, limit=limit)
     for item in raw_results:
         if isinstance(item, dict):
             try:
-                records.append(_record_from_payload(item))
+                candidate_records.append(_record_from_payload(item))
             except ValidationError:
                 continue
-    return records[:limit]
+    return _dedupe_ranked_parts(candidate_records, query=normalized_query, limit=limit)
 
 
 def resolve_lego_color(value: str | int | None) -> LegoColorRecord:
