@@ -66,6 +66,7 @@ _COMMON_PART_SIZES: dict[str, tuple[int, int]] = {
     "3622": (1, 3),
     "3710": (1, 4),
     "3795": (2, 6),
+    "3062b": (1, 1),
 }
 
 _FALLBACK_PARTS: dict[str, LegoPartRecord] = {
@@ -91,6 +92,7 @@ _FALLBACK_PARTS: dict[str, LegoPartRecord] = {
         "3622": "Brick 1 x 3",
         "3710": "Plate 1 x 4",
         "3795": "Plate 2 x 6",
+        "3062b": "Brick Round 1 x 1 Open Stud",
     }.items()
 }
 
@@ -216,7 +218,9 @@ def _part_search_score(record: LegoPartRecord, *, query: str) -> float:
 
     name_phrase = _search_phrase(record.name)
     part_num_phrase = _search_phrase(record.part_num)
-    haystack = " ".join((part_num_phrase, name_phrase, *(_search_phrase(item) for item in record.ldraw_ids)))
+    haystack = " ".join(
+        (part_num_phrase, name_phrase, *(_search_phrase(item) for item in record.ldraw_ids))
+    )
     haystack_tokens = set(_search_tokens(haystack))
 
     score = 0.0
@@ -245,7 +249,9 @@ def _part_search_score(record: LegoPartRecord, *, query: str) -> float:
     return score
 
 
-def _dedupe_ranked_parts(records: list[LegoPartRecord], *, query: str, limit: int) -> list[LegoPartRecord]:
+def _dedupe_ranked_parts(
+    records: list[LegoPartRecord], *, query: str, limit: int
+) -> list[LegoPartRecord]:
     best_by_part_num: dict[str, tuple[float, LegoPartRecord]] = {}
     for record in records:
         score = _part_search_score(record, query=query)

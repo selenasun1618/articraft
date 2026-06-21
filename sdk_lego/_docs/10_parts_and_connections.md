@@ -62,3 +62,48 @@ before strict validation can reason about them.
 LDraw is a static model format. Authoring can include Articraft articulations for
 semantic sidecar metadata, but the MPD output treats them as fixed placements.
 Use sidecar consumers for dynamic behavior.
+
+## URDF Proxy Authoring
+
+The native `sdk_lego.ArticulatedObject` path exports catalog pieces directly to
+LDraw MPD and does not create URDF visuals. For quick viewer iteration, use the
+separate proxy surface in `sdk_lego.proxy`: it creates ordinary SDK primitive
+visuals while preserving LEGO part metadata for later MPD export.
+
+```python
+from sdk import Origin, TestContext, TestReport
+from sdk_lego.proxy import LegoProxyObject, compile_proxy_object_to_ldraw_mpd
+
+
+def build_object_model() -> LegoProxyObject:
+    model = LegoProxyObject(name="proxy_stack")
+    lower = model.lego_part("lower", part_num="3001", color="red", origin=Origin())
+    model.lego_part(
+        "upper",
+        part_num="3020",
+        color="blue",
+        origin=Origin(xyz=(0.0, 0.0, 0.0096)),
+        parent=lower,
+        parent_connector="stud_0_0",
+        child_connector="antistud_0_0",
+    )
+    return model
+
+
+def run_tests() -> TestReport:
+    return TestContext(object_model).report()
+
+
+object_model = build_object_model()
+mpd_export = compile_proxy_object_to_ldraw_mpd(object_model, target="visual")
+```
+
+The current proxy seed supports common rectangular bricks and plates such as
+`3001`, `3003`, `3004`, `3005`, `3020`, `3022`, `3023`, `3024`, plus a simple
+round `3062b` proxy. The index is intentionally small but exposed through
+`top_lego_parts()`, `resolve_top_lego_part(...)`, and `find_top_lego_parts(...)`
+so it can grow toward a larger top-parts list.
+
+Proxy MPD conversion is strict: every part must be authored through
+`LegoProxyObject.lego_part(...)` or `add_lego_proxy_part(...)`. Arbitrary SDK
+geometry is rejected instead of being silently dropped from the LDraw export.
