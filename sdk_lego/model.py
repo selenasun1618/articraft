@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from sdk import Origin, Part, ValidationError
 from sdk import ArticulatedObject as _BaseArticulatedObject
+from sdk import Origin, Part, ValidationError
 
 from .catalog import LegoPartRecord, resolve_lego_color, resolve_lego_part
 

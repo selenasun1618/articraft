@@ -12,7 +12,6 @@ from sdk import ArticulationType, Origin, ValidationError
 
 from .model import (
     ArticulatedObject,
-    LegoConnection,
     connector_by_id,
     connector_world_position_ldu,
     distance_sq,
