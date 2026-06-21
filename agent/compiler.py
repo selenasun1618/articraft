@@ -267,6 +267,24 @@ def compile_ldraw_report(
         validate=run_checks,
     )
     warnings = [str(warning) for warning in getattr(export, "warnings", [])]
+    sidecar_json = getattr(export, "sidecar_json", None)
+    if isinstance(sidecar_json, dict):
+        sidecar_json = dict(sidecar_json)
+    try:
+        materialize_ldraw_mpd_to_obj = getattr(
+            _import_sdk_module(sdk_package, ".ldraw_materialize"),
+            "materialize_ldraw_mpd_to_obj",
+        )
+        script_root = script_path.resolve().parent
+        output_path = script_root / "assets" / "lego" / "model.obj"
+        materialized = materialize_ldraw_mpd_to_obj(
+            str(getattr(export, "mpd_text")),
+            output_path=output_path,
+        )
+        if isinstance(sidecar_json, dict):
+            sidecar_json["render_mesh"] = materialized.to_sidecar(asset_root=script_root)
+    except Exception as exc:
+        warnings.append(f"LDraw mesh materialization warning: {exc}")
     signal_bundle = build_compile_signal_bundle(status="success", warnings=warnings)
     return CompileReport(
         urdf_xml=str(getattr(export, "mpd_text")),
@@ -274,7 +292,7 @@ def compile_ldraw_report(
         signal_bundle=signal_bundle,
         artifact_format="ldraw-mpd",
         artifact_filename="model.mpd",
-        sidecar_json=getattr(export, "sidecar_json", None),
+        sidecar_json=sidecar_json if isinstance(sidecar_json, dict) else None,
     )
 
 

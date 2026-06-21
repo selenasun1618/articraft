@@ -31,7 +31,11 @@ from viewer.api.store_values import _normalize_sdk_package_value
 
 
 def _artifact_filename_for_sdk(sdk_package: str | None) -> str:
-    return "model.mpd" if str(sdk_package or "").strip().lower() in {"lego", "sdk_lego"} else "model.urdf"
+    return (
+        "model.mpd"
+        if str(sdk_package or "").strip().lower() in {"lego", "sdk_lego"}
+        else "model.urdf"
+    )
 
 
 def _artifact_format_for_filename(filename: str) -> str:
@@ -53,7 +57,9 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         record: dict[str, Any] | None = None,
     ) -> tuple[Path, Path, Path]:
         artifact_filename = _artifact_filename_for_sdk(
-            _normalize_sdk_package_value(record.get("sdk_package")) if isinstance(record, dict) else None
+            _normalize_sdk_package_value(record.get("sdk_package"))
+            if isinstance(record, dict)
+            else None
         )
         return (
             active_model_path(self.repo, record_id, record=record),
@@ -78,6 +84,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
                 layout.record_materialization_asset_meshes_dir(record_id),
                 layout.record_materialization_asset_glb_dir(record_id),
                 layout.record_materialization_asset_viewer_dir(record_id),
+                layout.record_materialization_assets_dir(record_id) / "lego",
             ]
         )
 
@@ -102,6 +109,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             self.repo.layout.record_materialization_asset_meshes_dir(record_id),
             self.repo.layout.record_materialization_asset_glb_dir(record_id),
             self.repo.layout.record_materialization_asset_viewer_dir(record_id),
+            self.repo.layout.record_materialization_assets_dir(record_id) / "lego",
         ):
             _remove_path_if_exists(path)
 
@@ -128,6 +136,10 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         _replace_tree_from_source(
             model_dir / "assets" / "viewer",
             self.repo.layout.record_materialization_asset_viewer_dir(record_id),
+        )
+        _replace_tree_from_source(
+            model_dir / "assets" / "lego",
+            self.repo.layout.record_materialization_assets_dir(record_id) / "lego",
         )
         _remove_path_if_exists(model_dir / "assets")
         _remove_path_if_exists(record_dir / "assets")
@@ -298,7 +310,9 @@ class ViewerMaterializationStore(ViewerStoreComponent):
 
             sdk_package = _normalize_sdk_package_value(refreshed_record.get("sdk_package")) or "sdk"
             is_lego = sdk_package in {"lego", "sdk_lego"}
-            run_checks = bool((validate and target == "full") or (is_lego and target in {"buildable", "strict"}))
+            run_checks = bool(
+                (validate and target == "full") or (is_lego and target in {"buildable", "strict"})
+            )
             validation_level = target if is_lego else ("full" if run_checks else "none")
             checks_run = (
                 ["compile_visual"]

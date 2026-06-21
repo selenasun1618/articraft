@@ -713,6 +713,10 @@ def write_success_record(
         context.staging_dir / "assets" / "viewer",
         storage_repo.layout.record_materialization_asset_viewer_dir(context.record_id),
     )
+    _replace_tree_from_source(
+        context.staging_dir / "assets" / "lego",
+        storage_repo.layout.record_materialization_assets_dir(context.record_id) / "lego",
+    )
 
     prompt_sha = _sha256_text(prompt_text)
     model_py_sha = _sha256_file(context.record_model_path)
