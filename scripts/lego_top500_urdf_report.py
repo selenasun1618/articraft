@@ -37,6 +37,7 @@ class PartInfo:
     depth_studs: int | None
     height_m: float
     confidence: str
+    bucket: str = "unspecified"
 
 
 def _download(url: str, path: Path) -> None:
@@ -91,7 +92,7 @@ def _top_part_frequencies(path: Path, *, limit: int) -> list[tuple[str, int]]:
     return counts.most_common(limit)
 
 
-def _infer_proxy(row: dict[str, str], frequency: int) -> PartInfo:
+def _infer_proxy(row: dict[str, str], frequency: int, *, bucket: str = "unspecified") -> PartInfo:
     part_num = row["part_num"]
     name = row.get("name", part_num)
     ldraw_ids = _parse_external_ids(row.get("external_ids", ""))
@@ -129,7 +130,83 @@ def _infer_proxy(row: dict[str, str], frequency: int) -> PartInfo:
         depth_studs=depth,
         height_m=height_m,
         confidence=confidence,
+        bucket=bucket,
     )
+
+
+def _bucket_for_filtered_part(row: dict[str, str], categories: dict[str, str]) -> str | None:
+    category = categories.get(row["part_cat_id"], "").lower()
+    name = row["name"].lower()
+    material = (row.get("part_material") or "").lower()
+    part_num = row["part_num"].lower()
+
+    if material and material not in {"plastic", "rubber", "flexible plastic", "metal"}:
+        return None
+    if "sticker" in category or "sticker" in name:
+        return None
+    if any(
+        blocked in category
+        for blocked in (
+            "minifig upper",
+            "minifig lower",
+            "minifig heads",
+            "minifig headwear",
+            "minidoll",
+            "minifigs",
+            "large buildable figures",
+            "non-buildable figures",
+        )
+    ):
+        return None
+    if any(blocked in category for blocked in ("duplo", "quatro", "primo", "modulex")):
+        return None
+
+    is_printed = any(token in name for token in (" print", " pattern")) or "pr" in part_num or "pat" in part_num
+    if is_printed:
+        return "printed_patterned_useful"
+    if "plate" in category or name.startswith("plate "):
+        return "plates"
+    if "brick" in category or name.startswith("brick "):
+        return "bricks"
+    if "tile" in category or name.startswith("tile "):
+        return "tiles"
+    if (
+        any(
+            token in category
+            for token in (
+                "technic pins",
+                "technic connectors",
+                "technic axles",
+                "technic beams",
+                "technic bricks",
+                "technic bushes",
+                "technic special",
+            )
+        )
+        or any(token in name for token in ("technic", "axle", "pin", "gear", "liftarm"))
+    ):
+        return "technic"
+    if "hinges" in category or any(token in name for token in ("hinge", "turntable")):
+        return "hinges_turntables"
+    if "bars" in category or any(token in name for token in ("bar", "clip", "ladder", "fence")):
+        return "bars_clips"
+    if any(token in category for token in ("window", "door", "panel", "windscreen")) or any(
+        token in name for token in ("window", "door", "panel", "windscreen")
+    ):
+        return "windows_doors_panels"
+    if any(token in category for token in ("wheel", "tyre", "tire")) or any(
+        token in name for token in ("wheel", "tyre", "tire")
+    ):
+        return "wheels_tires"
+    if any(token in category for token in ("animal", "plant")) or any(
+        token in name for token in ("animal", "plant", "bird", "horse", "tree", "leaf")
+    ):
+        return "animals_plants"
+    if any(token in category for token in ("slope", "wedge")) or any(
+        token in name for token in ("slope", "wedge", "curved")
+    ):
+        return "slopes_curved_wedges"
+    return "other_useful"
 
 
 def _dimensions(info: PartInfo) -> tuple[float, float, float]:
@@ -229,6 +306,7 @@ def _write_html(parts: list[PartInfo], output_dir: Path) -> None:
             f"{html.escape(info.name)}<br/>"
             f"<small>LDraw: {html.escape(info.ldraw_id)}<br/>"
             f"Frequency: {info.frequency:,}<br/>"
+            f"Bucket: {html.escape(info.bucket)}<br/>"
             f"Proxy: {html.escape(info.proxy_kind)} / {html.escape(info.confidence)}<br/>"
             f"Stud footprint: {info.width_studs or '?'} x {info.depth_studs or '?'}<br/>"
             f"<a href='{html.escape(urdf_rel)}'>URDF</a></small>"
@@ -276,13 +354,17 @@ def _indent(elem: ET.Element, level: int = 0) -> None:
         elem.tail = indent
 
 
-def generate_report(*, cache_dir: Path, output_dir: Path, limit: int = 500) -> list[PartInfo]:
-    parts_gz = cache_dir / "parts.csv.gz"
-    inventory_parts_gz = cache_dir / "inventory_parts.csv.gz"
-    _download(PARTS_URL, parts_gz)
-    _download(INVENTORY_PARTS_URL, inventory_parts_gz)
-    parts_by_num = _load_parts(parts_gz)
-    ranked = _top_part_frequencies(inventory_parts_gz, limit=limit * 3)
+def _load_categories(path: Path) -> dict[str, str]:
+    with gzip.open(path, "rt", encoding="utf-8", newline="") as handle:
+        return {row["id"]: row["name"] for row in csv.DictReader(handle)}
+
+
+def _select_top_parts(
+    ranked: list[tuple[str, int]],
+    *,
+    parts_by_num: dict[str, dict[str, str]],
+    limit: int,
+) -> list[PartInfo]:
     selected: list[PartInfo] = []
     seen: set[str] = set()
     for part_num, frequency in ranked:
@@ -291,10 +373,97 @@ def generate_report(*, cache_dir: Path, output_dir: Path, limit: int = 500) -> l
         row = parts_by_num.get(part_num)
         if row is None:
             continue
-        selected.append(_infer_proxy(row, frequency))
+        selected.append(_infer_proxy(row, frequency, bucket="top_frequency"))
         seen.add(part_num)
         if len(selected) >= limit:
             break
+    return selected
+
+
+def _select_filtered_relative_parts(
+    ranked: list[tuple[str, int]],
+    *,
+    parts_by_num: dict[str, dict[str, str]],
+    categories: dict[str, str],
+    limit: int,
+) -> list[PartInfo]:
+    ranked_by_bucket: dict[str, list[PartInfo]] = {}
+    bucket_frequency: Counter[str] = Counter()
+    seen: set[str] = set()
+    for part_num, frequency in ranked:
+        if part_num in seen:
+            continue
+        row = parts_by_num.get(part_num)
+        if row is None:
+            continue
+        bucket = _bucket_for_filtered_part(row, categories)
+        if bucket is None:
+            continue
+        info = _infer_proxy(row, frequency, bucket=bucket)
+        ranked_by_bucket.setdefault(bucket, []).append(info)
+        bucket_frequency[bucket] += frequency
+        seen.add(part_num)
+
+    total_frequency = sum(bucket_frequency.values())
+    if total_frequency <= 0:
+        return []
+
+    allocations: dict[str, int] = {}
+    remainders: list[tuple[float, str]] = []
+    for bucket, items in ranked_by_bucket.items():
+        exact = (bucket_frequency[bucket] / total_frequency) * limit
+        count = min(len(items), int(exact))
+        allocations[bucket] = count
+        remainders.append((exact - int(exact), bucket))
+
+    allocated = sum(allocations.values())
+    remainders.sort(reverse=True)
+    while allocated < limit:
+        progressed = False
+        for _fraction, bucket in remainders:
+            if allocated >= limit:
+                break
+            if allocations[bucket] < len(ranked_by_bucket[bucket]):
+                allocations[bucket] += 1
+                allocated += 1
+                progressed = True
+        if not progressed:
+            break
+
+    selected: list[PartInfo] = []
+    for bucket, _frequency in bucket_frequency.most_common():
+        selected.extend(ranked_by_bucket[bucket][: allocations.get(bucket, 0)])
+    selected.sort(key=lambda info: (-info.frequency, info.bucket, info.part_num))
+    return selected[:limit]
+
+
+def generate_report(
+    *,
+    cache_dir: Path,
+    output_dir: Path,
+    limit: int = 500,
+    selection: str = "top",
+) -> list[PartInfo]:
+    parts_gz = cache_dir / "parts.csv.gz"
+    inventory_parts_gz = cache_dir / "inventory_parts.csv.gz"
+    part_categories_gz = cache_dir / "part_categories.csv.gz"
+    _download(PARTS_URL, parts_gz)
+    _download(INVENTORY_PARTS_URL, inventory_parts_gz)
+    _download(f"{DOWNLOAD_BASE}/part_categories.csv.gz", part_categories_gz)
+    parts_by_num = _load_parts(parts_gz)
+    categories = _load_categories(part_categories_gz)
+    ranked = _top_part_frequencies(inventory_parts_gz, limit=max(limit * 8, 5000))
+    if selection == "filtered-relative":
+        selected = _select_filtered_relative_parts(
+            ranked,
+            parts_by_num=parts_by_num,
+            categories=categories,
+            limit=limit,
+        )
+    elif selection == "top":
+        selected = _select_top_parts(ranked, parts_by_num=parts_by_num, limit=limit)
+    else:
+        raise ValueError(f"Unsupported selection mode: {selection!r}")
 
     urdf_dir = output_dir / "urdf"
     urdf_dir.mkdir(parents=True, exist_ok=True)
@@ -313,11 +482,27 @@ def main() -> int:
     parser.add_argument("--cache-dir", type=Path, default=Path("data/cache/lego/rebrickable_csv"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/local/lego_top500_urdf_report"))
     parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument(
+        "--selection",
+        choices=("top", "filtered-relative"),
+        default="top",
+        help=(
+            "top ranks by raw inventory quantity; filtered-relative removes noisy categories and "
+            "samples useful buckets proportionally to inventory frequency."
+        ),
+    )
     args = parser.parse_args()
-    parts = generate_report(cache_dir=args.cache_dir, output_dir=args.output_dir, limit=args.limit)
+    parts = generate_report(
+        cache_dir=args.cache_dir,
+        output_dir=args.output_dir,
+        limit=args.limit,
+        selection=args.selection,
+    )
     confidence = Counter(part.confidence for part in parts)
+    buckets = Counter(part.bucket for part in parts)
     print(f"wrote {len(parts)} parts to {args.output_dir}")
     print("confidence:", dict(confidence))
+    print("buckets:", dict(buckets))
     print("html:", args.output_dir / "index.html")
     return 0
 
