@@ -14,22 +14,15 @@ from .catalog_snapshot import get_active_catalog_snapshot
 from .model import (
     ArticulatedObject,
     connector_by_id,
+    connector_world_axis_sdk,
     connector_world_position_ldu,
+    connectors_compatible,
     distance_sq,
     lego_connectors,
     lego_piece_spec,
 )
 
 LegoCompileTarget = Literal["visual", "buildable", "strict"]
-_COMPATIBLE_CONNECTORS = {
-    frozenset(("stud", "antistud")),
-    frozenset(("bar", "clip")),
-    frozenset(("ball", "socket")),
-    frozenset(("towball", "towball_socket")),
-    frozenset(("rail", "groove")),
-}
-
-
 @dataclass(frozen=True, slots=True)
 class LDrawExport:
     mpd_text: str
@@ -112,7 +105,7 @@ def _validate_lego_model(object_model: ArticulatedObject, *, target: LegoCompile
             raise ValidationError(f"LEGO connection {connection!r} cannot connect a part to itself")
         parent_connector = connector_by_id(parent, connection.parent_connector)
         child_connector = connector_by_id(child, connection.child_connector)
-        if frozenset((parent_connector.type, child_connector.type)) not in _COMPATIBLE_CONNECTORS:
+        if not connectors_compatible(parent_connector, child_connector):
             raise ValidationError(
                 "Incompatible LEGO connectors: "
                 f"{parent.name}.{parent_connector.id} ({parent_connector.type}) -> "
@@ -138,6 +131,17 @@ def _validate_lego_model(object_model: ArticulatedObject, *, target: LegoCompile
                     "Strict LEGO connection endpoints must coincide in LDraw space: "
                     f"{parent.name}.{parent_connector.id}={parent_pos} "
                     f"{child.name}.{child_connector.id}={child_pos}"
+                )
+            parent_axis = connector_world_axis_sdk(parent, parent_connector)
+            child_axis = connector_world_axis_sdk(child, child_connector)
+            axis_dot = sum(
+                parent_axis[index] * child_axis[index] for index in range(3)
+            )
+            if axis_dot > -0.999:
+                raise ValidationError(
+                    "Strict LEGO connection axes must oppose each other: "
+                    f"{parent.name}.{parent_connector.id} axis={parent_axis} "
+                    f"{child.name}.{child_connector.id} axis={child_axis}"
                 )
 
     if len(object_model.parts) > 1:

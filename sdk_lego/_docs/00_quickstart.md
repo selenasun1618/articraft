@@ -25,16 +25,12 @@ from sdk_lego import ArticulatedObject, Origin, TestContext, TestReport
 
 def build_object_model() -> ArticulatedObject:
     model = ArticulatedObject(name="stacked_bricks")
-    lower = model.part("lower", part_num="3001", color="red", origin=Origin())
-    upper = model.part(
+    lower = model.root_piece("lower", part_num="3001", color="red")
+    model.attach(
         "upper",
         part_num="3020",
         color="blue",
-        origin=Origin(xyz=(0.0, 0.0, 0.0096)),
-    )
-    model.lego_connection(
-        lower,
-        upper,
+        parent=lower,
         parent_connector="stud_0_0",
         child_connector="antistud_0_0",
     )
@@ -58,13 +54,16 @@ object_model = build_object_model()
 ## Authoring Rules
 
 - Each `Part` is exactly one LEGO catalog piece.
-- Use `model.part(name, part_num=..., color=..., origin=...)`.
-- Use real Rebrickable/LDraw part numbers; do not invent dimensions or custom
-  mesh geometry.
-- Connect pieces with `model.lego_connection(...)`.
+- Start with exactly one `model.root_piece(...)`.
+- Add all other pieces with `model.attach(...)`; it computes placement from the
+  selected connector frames.
+- Search only the active approved catalog. Do not invent part numbers, override
+  LDraw IDs, or call Rebrickable directly during generation.
+- `model.part(...)` and `model.lego_connection(...)` remain low-level diagnostic
+  surfaces; do not use them for normal generated assemblies.
 - Basic bricks and plates derive stud and antistud connector locations from the
-  part name, such as `Brick 2 x 4` or `Plate 1 x 2`.
+  versioned approved catalog.
 - `buildable` validation checks connector compatibility, duplicate connector
   use, and connectedness.
 - `strict` validation additionally requires connected connector endpoints to
-  coincide in LDraw space.
+  coincide and connector axes to oppose.

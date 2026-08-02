@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -149,6 +150,80 @@ class ArticulatedObject(_BaseArticulatedObject):
         self._part_index[name] = piece
         return piece
 
+    def root_piece(
+        self,
+        name: str,
+        *,
+        part_num: str,
+        color: str | int | None = None,
+        origin: Origin | None = None,
+        meta: dict[str, object] | None = None,
+    ) -> Part:
+        if self.parts:
+            raise ValidationError("root_piece() requires an empty LEGO assembly")
+        return self.part(
+            name,
+            part_num=part_num,
+            color=color,
+            origin=origin,
+            meta=meta,
+        )
+
+    def attach(
+        self,
+        name: str,
+        *,
+        part_num: str,
+        color: str | int | None,
+        parent: str | Part,
+        parent_connector: str,
+        child_connector: str,
+        quarter_turns: int = 0,
+        meta: dict[str, object] | None = None,
+    ) -> Part:
+        parent_part = self.get_part(parent)
+        parent_frame = connector_by_id(parent_part, parent_connector)
+        child_record = resolve_lego_part(part_num)
+        child_connectors = derive_connectors(child_record)
+        child_frame = _connector_from_sequence(
+            child_connectors,
+            child_connector,
+            part_name=name,
+        )
+        if not connectors_compatible(parent_frame, child_frame):
+            raise ValidationError(
+                "Incompatible LEGO connectors: "
+                f"{parent_part.name}.{parent_frame.id} ({parent_frame.type}) -> "
+                f"{name}.{child_frame.id} ({child_frame.type})"
+            )
+
+        parent_origin = lego_piece_spec(parent_part).origin
+        parent_rotation = _rpy_rotation_matrix(parent_origin.rpy)
+        clocking = _rpy_rotation_matrix((0.0, 0.0, int(quarter_turns) * math.pi / 2.0))
+        child_rotation = _mat3_multiply(parent_rotation, clocking)
+        parent_local = _ldraw_vector_to_sdk_m(parent_frame.position_ldu)
+        child_local = _ldraw_vector_to_sdk_m(child_frame.position_ldu)
+        parent_world = _vec_add(parent_origin.xyz, _mat3_vec(parent_rotation, parent_local))
+        child_xyz = _vec_sub(parent_world, _mat3_vec(child_rotation, child_local))
+        child_origin = Origin(
+            xyz=child_xyz,
+            rpy=_rotation_matrix_to_rpy(child_rotation),
+        )
+        child = self.part(
+            name,
+            part_num=part_num,
+            color=color,
+            origin=child_origin,
+            meta=meta,
+        )
+        self.lego_connection(
+            parent_part,
+            child,
+            parent_connector=parent_connector,
+            child_connector=child_connector,
+        )
+        return child
+
     def lego_connection(
         self,
         parent: str | Part,
@@ -210,14 +285,34 @@ def connector_by_id(part: Part, connector_id: str) -> LegoConnector:
     raise ValidationError(f"Part {part.name!r} has no LEGO connector {connector_id!r}")
 
 
+def connectors_compatible(a: LegoConnector, b: LegoConnector) -> bool:
+    return frozenset((a.type, b.type)) in {
+        frozenset(("stud", "antistud")),
+        frozenset(("bar", "clip")),
+        frozenset(("ball", "socket")),
+        frozenset(("towball", "towball_socket")),
+        frozenset(("rail", "groove")),
+    }
+
+
 def connector_world_position_ldu(part: Part, connector: LegoConnector) -> tuple[float, float, float]:
     spec = lego_piece_spec(part)
-    origin = _origin_translation_ldu(spec.origin)
-    return (
-        origin[0] + connector.position_ldu[0],
-        origin[1] + connector.position_ldu[1],
-        origin[2] + connector.position_ldu[2],
-    )
+    rotation = _rpy_rotation_matrix(spec.origin.rpy)
+    local_sdk = _ldraw_vector_to_sdk_m(connector.position_ldu)
+    world_sdk = _vec_add(spec.origin.xyz, _mat3_vec(rotation, local_sdk))
+    return _sdk_m_vector_to_ldraw(world_sdk)
+
+
+def connector_world_axis_sdk(part: Part, connector: LegoConnector) -> tuple[float, float, float]:
+    spec = lego_piece_spec(part)
+    rotation = _rpy_rotation_matrix(spec.origin.rpy)
+    x, y, z = connector.axis
+    local_sdk = (float(x), float(z), -float(y))
+    world = _mat3_vec(rotation, local_sdk)
+    magnitude = math.sqrt(sum(value * value for value in world))
+    if magnitude <= 1e-12:
+        raise ValidationError(f"Part {part.name!r} connector {connector.id!r} has a zero axis")
+    return tuple(value / magnitude for value in world)  # type: ignore[return-value]
 
 
 def _origin_translation_ldu(origin: Origin) -> tuple[float, float, float]:
@@ -228,3 +323,78 @@ def _origin_translation_ldu(origin: Origin) -> tuple[float, float, float]:
 
 def distance_sq(a: Sequence[float], b: Sequence[float]) -> float:
     return sum((float(a[index]) - float(b[index])) ** 2 for index in range(3))
+
+
+Matrix3 = tuple[
+    tuple[float, float, float],
+    tuple[float, float, float],
+    tuple[float, float, float],
+]
+
+
+def _connector_from_sequence(
+    connectors: Sequence[LegoConnector],
+    connector_id: str,
+    *,
+    part_name: str,
+) -> LegoConnector:
+    for connector in connectors:
+        if connector.id == connector_id:
+            return connector
+    raise ValidationError(f"Part {part_name!r} has no LEGO connector {connector_id!r}")
+
+
+def _ldraw_vector_to_sdk_m(values: Sequence[float]) -> tuple[float, float, float]:
+    x, y, z = (float(value) for value in values)
+    return (x / 2500.0, z / 2500.0, -y / 2500.0)
+
+
+def _sdk_m_vector_to_ldraw(values: Sequence[float]) -> tuple[float, float, float]:
+    x, y, z = (float(value) for value in values)
+    return (x * 2500.0, -z * 2500.0, y * 2500.0)
+
+
+def _rpy_rotation_matrix(rpy: Sequence[float]) -> Matrix3:
+    roll, pitch, yaw = (float(value) for value in rpy)
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    return (
+        (cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr),
+        (sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr),
+        (-sp, cp * sr, cp * cr),
+    )
+
+
+def _rotation_matrix_to_rpy(matrix: Matrix3) -> tuple[float, float, float]:
+    pitch = math.asin(max(-1.0, min(1.0, -matrix[2][0])))
+    cp = math.cos(pitch)
+    if abs(cp) > 1e-9:
+        roll = math.atan2(matrix[2][1], matrix[2][2])
+        yaw = math.atan2(matrix[1][0], matrix[0][0])
+    else:
+        roll = 0.0
+        yaw = math.atan2(-matrix[0][1], matrix[1][1])
+    return (roll, pitch, yaw)
+
+
+def _mat3_multiply(a: Matrix3, b: Matrix3) -> Matrix3:
+    return tuple(
+        tuple(sum(a[row][index] * b[index][column] for index in range(3)) for column in range(3))
+        for row in range(3)
+    )  # type: ignore[return-value]
+
+
+def _mat3_vec(matrix: Matrix3, vector: Sequence[float]) -> tuple[float, float, float]:
+    return tuple(
+        sum(matrix[row][column] * float(vector[column]) for column in range(3))
+        for row in range(3)
+    )  # type: ignore[return-value]
+
+
+def _vec_add(a: Sequence[float], b: Sequence[float]) -> tuple[float, float, float]:
+    return tuple(float(a[index]) + float(b[index]) for index in range(3))  # type: ignore[return-value]
+
+
+def _vec_sub(a: Sequence[float], b: Sequence[float]) -> tuple[float, float, float]:
+    return tuple(float(a[index]) - float(b[index]) for index in range(3))  # type: ignore[return-value]

@@ -2,20 +2,20 @@
 
 ## Parts
 
-In `sdk_lego`, an Articraft `Part` is one physical LEGO piece:
+In `sdk_lego`, an Articraft `Part` is one physical LEGO piece selected from the
+active immutable catalog snapshot:
 
 ```python
-piece = model.part(
+piece = model.root_piece(
     "red_2x4_brick",
     part_num="3001",
     color="red",
-    origin=Origin(xyz=(0.0, 0.0, 0.0)),
 )
 ```
 
-The compiler resolves `part_num` through the local LEGO cache, then Rebrickable
-when `REBRICKABLE_API_KEY` is configured. The exporter references the resolved
-LDraw `.dat` filename.
+Generation never resolves arbitrary Rebrickable results. The default
+`structural_v1` catalog is versioned, fingerprinted, and revalidated during
+compile. Rebrickable access is reserved for offline catalog-ingestion tooling.
 
 ## Connectors
 
@@ -34,16 +34,23 @@ Examples:
 
 ## Connections
 
-Use explicit connector pairs:
+Attach every non-root piece through explicit connector pairs:
 
 ```python
-model.lego_connection(
+upper = model.attach(
+    "upper",
+    part_num="3020",
+    color="blue",
     parent=lower,
-    child=upper,
     parent_connector="stud_0_0",
     child_connector="antistud_0_0",
+    quarter_turns=0,
 )
 ```
+
+`attach(...)` computes the child transform from the parent connector frame,
+child connector frame, and optional 90-degree clocking. Do not hand-author XYZ
+placements for normal generated assemblies.
 
 Supported compatibility in the initial LEGO compiler:
 
