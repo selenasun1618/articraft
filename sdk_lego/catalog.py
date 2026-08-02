@@ -36,6 +36,15 @@ class LegoPartRecord:
 
     @property
     def nominal_size(self) -> tuple[int, int] | None:
+        raw_size = self.raw.get("nominal_size")
+        if isinstance(raw_size, (list, tuple)) and len(raw_size) == 2:
+            try:
+                width, depth = int(raw_size[0]), int(raw_size[1])
+            except (TypeError, ValueError):
+                pass
+            else:
+                if width > 0 and depth > 0:
+                    return (width, depth)
         match = _NAME_SIZE_RE.search(self.name)
         if match is None:
             return _COMMON_PART_SIZES.get(self.part_num)
@@ -267,7 +276,9 @@ def _dedupe_ranked_parts(
     return [record for _, record in ranked[:limit]]
 
 
-def resolve_lego_part(part_num: str) -> LegoPartRecord:
+def fetch_rebrickable_part(part_num: str) -> LegoPartRecord:
+    """Fetch one unconstrained Rebrickable record for catalog-ingestion workflows."""
+
     key = str(part_num).strip()
     if not key:
         raise ValidationError("part_num is required")
@@ -285,7 +296,9 @@ def resolve_lego_part(part_num: str) -> LegoPartRecord:
     return _record_from_payload(payload)
 
 
-def find_lego_parts(query: str, *, limit: int = 5) -> list[LegoPartRecord]:
+def search_rebrickable_parts(query: str, *, limit: int = 5) -> list[LegoPartRecord]:
+    """Search unconstrained Rebrickable data for catalog-ingestion workflows."""
+
     normalized_query = " ".join(str(query).strip().split())
     if not normalized_query:
         return []
@@ -319,6 +332,27 @@ def find_lego_parts(query: str, *, limit: int = 5) -> list[LegoPartRecord]:
             except ValidationError:
                 continue
     return _dedupe_ranked_parts(candidate_records, query=normalized_query, limit=limit)
+
+
+def resolve_lego_part(part_num: str) -> LegoPartRecord:
+    """Resolve a part from the active, immutable generation catalog."""
+
+    from .catalog_snapshot import get_active_catalog_snapshot
+
+    return get_active_catalog_snapshot().resolve_record(part_num)
+
+
+def find_lego_parts(query: str, *, limit: int = 5) -> list[LegoPartRecord]:
+    """Search only parts approved by the active generation catalog."""
+
+    from .catalog_snapshot import get_active_catalog_snapshot
+
+    snapshot = get_active_catalog_snapshot()
+    records = [
+        part.to_record(catalog_id=snapshot.catalog_id, catalog_sha256=snapshot.sha256)
+        for part in snapshot.parts
+    ]
+    return _dedupe_ranked_parts(records, query=query, limit=max(1, int(limit)))
 
 
 def resolve_lego_color(value: str | int | None) -> LegoColorRecord:

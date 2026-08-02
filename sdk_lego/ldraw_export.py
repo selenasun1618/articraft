@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from sdk import ArticulationType, Origin, ValidationError
 
+from .catalog_snapshot import get_active_catalog_snapshot
 from .model import (
     ArticulatedObject,
     connector_by_id,
@@ -64,6 +65,16 @@ def _normalize_target(target: str) -> LegoCompileTarget:
 
 
 def _validate_lego_model(object_model: ArticulatedObject, *, target: LegoCompileTarget) -> None:
+    snapshot = get_active_catalog_snapshot()
+    model_catalog_id = object_model.meta.get("lego_catalog_id")
+    model_catalog_sha256 = object_model.meta.get("lego_catalog_sha256")
+    if model_catalog_id != snapshot.catalog_id:
+        raise ValidationError(
+            f"Model LEGO catalog {model_catalog_id!r} does not match active catalog "
+            f"{snapshot.catalog_id!r}"
+        )
+    if model_catalog_sha256 != snapshot.sha256:
+        raise ValidationError("Model LEGO catalog fingerprint does not match active catalog")
     if not object_model.parts:
         raise ValidationError("LEGO object must contain at least one part")
     seen_names: set[str] = set()
@@ -71,7 +82,14 @@ def _validate_lego_model(object_model: ArticulatedObject, *, target: LegoCompile
         if part.name in seen_names:
             raise ValidationError(f"Duplicate LEGO part name: {part.name!r}")
         seen_names.add(part.name)
-        lego_piece_spec(part)
+        spec = lego_piece_spec(part)
+        approved = snapshot.resolve_part(spec.part_num)
+        if spec.ldraw_id != approved.ldraw_id:
+            raise ValidationError(
+                f"Part {part.name!r} uses LDraw id {spec.ldraw_id!r}; "
+                f"catalog {snapshot.catalog_id!r} requires {approved.ldraw_id!r}"
+            )
+        snapshot.validate_color(spec.color_id)
 
     if target == "visual":
         return
@@ -141,6 +159,7 @@ def _build_sidecar(
     *,
     target: LegoCompileTarget,
 ) -> dict[str, Any]:
+    snapshot = get_active_catalog_snapshot()
     pieces = []
     for part in object_model.parts:
         spec = lego_piece_spec(part)
@@ -191,6 +210,11 @@ def _build_sidecar(
         "format": "articraft_lego_ldraw_sidecar",
         "name": object_model.name,
         "target": target,
+        "catalog": {
+            "catalog_id": snapshot.catalog_id,
+            "catalog_sha256": snapshot.sha256,
+        },
+        "used_part_nums": sorted({lego_piece_spec(part).part_num for part in object_model.parts}),
         "pieces": pieces,
         "connections": [
             {
@@ -212,6 +236,10 @@ def _render_mpd(object_model: ArticulatedObject, *, sidecar: dict[str, Any]) -> 
         f"0 FILE {main_name}",
         f"0 {object_model.name}",
         "0 !ARTICRAFT_FORMAT LEGO_LDRAW_MPD 1",
+        (
+            "0 !ARTICRAFT_CATALOG "
+            f"{sidecar['catalog']['catalog_id']} {sidecar['catalog']['catalog_sha256']}"
+        ),
         "0 !ARTICRAFT_SIDECAR_BEGIN",
         *_json_comment_lines(sidecar),
         "0 !ARTICRAFT_SIDECAR_END",

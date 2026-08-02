@@ -144,4 +144,5 @@ def test_find_examples_uses_lego_catalog_fallback() -> None:
     first = result.output[0]
     assert first["part_num"] == "3001"
     assert first["ldraw_filename"] == "3001.dat"
-    assert first["path"] == "rebrickable://lego/parts/3001"
+    assert first["catalog_id"] == "structural_v1"
+    assert first["path"] == "lego-catalog://structural_v1/parts/3001"

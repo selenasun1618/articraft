@@ -7,6 +7,7 @@ from sdk import ArticulatedObject as _BaseArticulatedObject
 from sdk import Origin, Part, ValidationError
 
 from .catalog import LegoPartRecord, resolve_lego_color, resolve_lego_part
+from .catalog_snapshot import get_active_catalog_snapshot
 
 STUD_PITCH_LDU = 20.0
 PLATE_HEIGHT_LDU = 8.0
@@ -41,6 +42,9 @@ class LegoConnection:
 
 
 def _piece_height_ldu(record: LegoPartRecord) -> float:
+    raw_height = record.raw.get("height_ldu")
+    if isinstance(raw_height, (int, float)) and float(raw_height) > 0:
+        return float(raw_height)
     name = record.name.lower()
     if "plate" in name or "tile" in name:
         return PLATE_HEIGHT_LDU
@@ -86,6 +90,21 @@ class ArticulatedObject(_BaseArticulatedObject):
     expressed as connector-level relationships and exported as LDraw MPD files.
     """
 
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        snapshot = get_active_catalog_snapshot()
+        existing_id = self.meta.get("lego_catalog_id")
+        existing_sha = self.meta.get("lego_catalog_sha256")
+        if existing_id is not None and existing_id != snapshot.catalog_id:
+            raise ValidationError(
+                f"Model catalog {existing_id!r} does not match active catalog "
+                f"{snapshot.catalog_id!r}"
+            )
+        if existing_sha is not None and existing_sha != snapshot.sha256:
+            raise ValidationError("Model LEGO catalog fingerprint does not match active catalog")
+        self.meta["lego_catalog_id"] = snapshot.catalog_id
+        self.meta["lego_catalog_sha256"] = snapshot.sha256
+
     def part(  # type: ignore[override]
         self,
         name: str,
@@ -96,11 +115,20 @@ class ArticulatedObject(_BaseArticulatedObject):
         origin: Origin | None = None,
         meta: dict[str, object] | None = None,
     ) -> Part:
+        snapshot = get_active_catalog_snapshot()
         record = resolve_lego_part(part_num)
         lego_color = resolve_lego_color(color)
+        snapshot.validate_color(lego_color.ldraw_id)
+        approved = snapshot.resolve_part(record.part_num)
+        resolved_ldraw_id = str(ldraw_id or approved.ldraw_id)
+        if resolved_ldraw_id != approved.ldraw_id:
+            raise ValidationError(
+                f"Part {record.part_num!r} must use approved LDraw id "
+                f"{approved.ldraw_id!r}, got {resolved_ldraw_id!r}"
+            )
         spec = LegoPieceSpec(
             part_num=record.part_num,
-            ldraw_id=str(ldraw_id or record.ldraw_filename),
+            ldraw_id=resolved_ldraw_id,
             color_id=lego_color.ldraw_id,
             color_name=lego_color.name,
             origin=origin or Origin(),

@@ -60,13 +60,16 @@ class FindExamplesInvocation(BaseToolInvocation[FindExamplesParams, list[dict[st
     def _serialize_lego_part(self, part: Any) -> dict[str, object]:
         ldraw_ids = list(getattr(part, "ldraw_ids", ()) or ())
         content = (
-            f"LEGO catalog part {part.part_num}: {part.name}\n"
-            f"- Rebrickable part_num: {part.part_num}\n"
+            f"Approved LEGO catalog part {part.part_num}: {part.name}\n"
+            f"- Approved part_num: {part.part_num}\n"
             f"- LDraw IDs: {', '.join(ldraw_ids) if ldraw_ids else part.part_num}\n"
             f"- Suggested LDraw file: {part.ldraw_filename}\n"
             f"- Nominal stud footprint: {part.nominal_size or 'unknown'}\n"
             "- Use with sdk_lego.ArticulatedObject.part(...)."
         )
+        raw = getattr(part, "raw", {})
+        catalog_id = raw.get("catalog_id") if isinstance(raw, dict) else None
+        catalog_sha256 = raw.get("catalog_sha256") if isinstance(raw, dict) else None
         result: dict[str, object] = {
             "example_id": f"lego_part:{part.part_num}",
             "title": part.name,
@@ -75,14 +78,16 @@ class FindExamplesInvocation(BaseToolInvocation[FindExamplesParams, list[dict[st
             "content": content,
             "match_quality": "catalog",
             "matched_tokens": [],
-            "matched_fields": ["rebrickable_catalog"],
+            "matched_fields": ["approved_catalog"],
             "part_num": part.part_num,
             "ldraw_ids": ldraw_ids,
             "ldraw_filename": part.ldraw_filename,
             "nominal_size": part.nominal_size,
+            "catalog_id": catalog_id,
+            "catalog_sha256": catalog_sha256,
         }
         if self.include_paths:
-            result["path"] = f"rebrickable://lego/parts/{part.part_num}"
+            result["path"] = f"lego-catalog://{catalog_id}/parts/{part.part_num}"
         return result
 
     def _serialize_match(self, doc: Any) -> dict[str, object]:
