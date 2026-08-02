@@ -9,6 +9,7 @@ from sdk.v0._urdf_export import compile_object_to_urdf_xml
 from sdk_lego.proxy import (
     LegoProxyObject,
     add_lego_proxy_part,
+    compile_native_object_to_proxy_urdf_xml,
     compile_proxy_object_to_ldraw_mpd,
 )
 from sdk_lego.top_parts import resolve_top_lego_part, top_lego_parts
@@ -123,6 +124,29 @@ def test_proxy_metadata_round_trips_to_mpd() -> None:
             "connection_type": "fixed",
         }
     ]
+
+
+def test_native_catalog_assembly_renders_through_proxy_urdf() -> None:
+    from sdk_lego import ArticulatedObject
+
+    model = ArticulatedObject(name="native_stack")
+    lower = model.root_piece("lower", part_num="3001", color="red")
+    model.attach(
+        "upper",
+        part_num="3020",
+        color="blue",
+        parent=lower,
+        parent_connector="stud_0_0",
+        child_connector="antistud_0_0",
+    )
+
+    urdf = compile_native_object_to_proxy_urdf_xml(model)
+
+    assert '<robot name="native_stack_proxy">' in urdf
+    assert '<link name="lower">' in urdf
+    assert '<link name="upper">' in urdf
+    assert '<joint name="lower_to_upper_fixed" type="fixed">' in urdf
+    assert urdf.count("<cylinder") == 16
 
 
 def test_proxy_export_rejects_arbitrary_sdk_geometry() -> None:

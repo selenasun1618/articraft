@@ -4,6 +4,7 @@ import json
 import math
 import os
 import urllib.request
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -156,6 +157,35 @@ def _validate_lego_model(object_model: ArticulatedObject, *, target: LegoCompile
         if visited != set(part_by_name):
             missing = sorted(set(part_by_name) - visited)
             raise ValidationError(f"LEGO build is disconnected; unreachable parts: {missing}")
+        _validate_assembly_order(object_model)
+
+
+def _validate_assembly_order(object_model: ArticulatedObject) -> None:
+    part_order = {part.name: index for index, part in enumerate(object_model.parts)}
+    root_name = object_model.parts[0].name
+    incoming_parents: dict[str, set[str]] = {
+        part.name: set() for part in object_model.parts
+    }
+    for connection in object_model.lego_connections():
+        incoming_parents[connection.child].add(connection.parent)
+        if part_order[connection.parent] >= part_order[connection.child]:
+            raise ValidationError(
+                f"LEGO assembly order requires parent {connection.parent!r} before "
+                f"child {connection.child!r}"
+            )
+    if incoming_parents[root_name]:
+        raise ValidationError(f"Root LEGO piece {root_name!r} cannot have an incoming connection")
+    for part in object_model.parts[1:]:
+        parents = incoming_parents[part.name]
+        if not parents:
+            raise ValidationError(
+                f"LEGO assembly piece {part.name!r} has no earlier attachment parent"
+            )
+        if len(parents) > 1:
+            raise ValidationError(
+                f"LEGO assembly piece {part.name!r} has multiple attachment parents: "
+                f"{sorted(parents)}"
+            )
 
 
 def _build_sidecar(
@@ -209,6 +239,11 @@ def _build_sidecar(
             }
         )
 
+    inventory_counts = Counter(
+        (lego_piece_spec(part).part_num, lego_piece_spec(part).color_id)
+        for part in object_model.parts
+    )
+    connections = object_model.lego_connections()
     return {
         "schema_version": 1,
         "format": "articraft_lego_ldraw_sidecar",
@@ -219,6 +254,31 @@ def _build_sidecar(
             "catalog_sha256": snapshot.sha256,
         },
         "used_part_nums": sorted({lego_piece_spec(part).part_num for part in object_model.parts}),
+        "inventory": [
+            {
+                "part_num": part_num,
+                "color_id": color_id,
+                "quantity": quantity,
+            }
+            for (part_num, color_id), quantity in sorted(inventory_counts.items())
+        ],
+        "assembly_steps": [
+            {
+                "step": index + 1,
+                "piece": part.name,
+                "part_num": lego_piece_spec(part).part_num,
+                "attachments": [
+                    {
+                        "parent": connection.parent,
+                        "parent_connector": connection.parent_connector,
+                        "child_connector": connection.child_connector,
+                    }
+                    for connection in connections
+                    if connection.child == part.name
+                ],
+            }
+            for index, part in enumerate(object_model.parts)
+        ],
         "pieces": pieces,
         "connections": [
             {
@@ -228,7 +288,7 @@ def _build_sidecar(
                 "child_connector": connection.child_connector,
                 "connection_type": connection.connection_type,
             }
-            for connection in object_model.lego_connections()
+            for connection in connections
         ],
         "articulations": articulations,
     }
@@ -248,7 +308,9 @@ def _render_mpd(object_model: ArticulatedObject, *, sidecar: dict[str, Any]) -> 
         *_json_comment_lines(sidecar),
         "0 !ARTICRAFT_SIDECAR_END",
     ]
-    for part in object_model.parts:
+    for index, part in enumerate(object_model.parts):
+        if index > 0:
+            lines.append("0 STEP")
         spec = lego_piece_spec(part)
         x, y, z = _origin_translation_ldu(spec.origin)
         a, b, c, d, e, f, g, h, i = _origin_matrix(spec.origin)

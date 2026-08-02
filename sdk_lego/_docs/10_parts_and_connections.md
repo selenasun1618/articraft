@@ -70,6 +70,21 @@ LDraw is a static model format. Authoring can include Articraft articulations fo
 semantic sidecar metadata, but the MPD output treats them as fixed placements.
 Use sidecar consumers for dynamic behavior.
 
+## Build Order And Instructions
+
+Piece creation order is assembly order:
+
+1. `root_piece(...)` creates step 1.
+2. Every `attach(...)` appends one later step.
+3. The parent piece must already exist.
+4. Each non-root piece has one attachment parent in the initial instruction
+   model.
+
+The MPD exporter inserts `0 STEP` between pieces and records `assembly_steps`
+plus a part/color inventory in `model.sidecar.json`. This is suitable as input
+to instruction tooling such as LPub3D, but does not yet prove insertion
+clearance, model stability, or Studio instruction-layout quality.
+
 ## URDF Proxy Authoring
 
 The native `sdk_lego.ArticulatedObject` path exports catalog pieces directly to

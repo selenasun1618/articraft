@@ -43,6 +43,31 @@ def test_ldraw_export_emits_mpd_and_sidecar() -> None:
     assert "3020.dat" in export.mpd_text
     assert export.sidecar_json["format"] == "articraft_lego_ldraw_sidecar"
     assert [piece["part_num"] for piece in export.sidecar_json["pieces"]] == ["3001", "3020"]
+    assert export.mpd_text.count("0 STEP") == 1
+    assert export.sidecar_json["assembly_steps"] == [
+        {
+            "step": 1,
+            "piece": "lower",
+            "part_num": "3001",
+            "attachments": [],
+        },
+        {
+            "step": 2,
+            "piece": "upper",
+            "part_num": "3020",
+            "attachments": [
+                {
+                    "parent": "lower",
+                    "parent_connector": "stud_0_0",
+                    "child_connector": "antistud_0_0",
+                }
+            ],
+        },
+    ]
+    assert export.sidecar_json["inventory"] == [
+        {"part_num": "3001", "color_id": 4, "quantity": 1},
+        {"part_num": "3020", "color_id": 1, "quantity": 1},
+    ]
     assert export.sidecar_json["connections"] == [
         {
             "parent": "lower",

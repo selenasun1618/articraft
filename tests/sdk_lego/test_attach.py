@@ -141,3 +141,55 @@ def test_strict_compile_rejects_coincident_but_same_direction_axes() -> None:
 
     with pytest.raises(ValidationError, match="axes must oppose"):
         compile_object_to_ldraw_mpd(model, target="strict")
+
+
+def test_buildable_compile_rejects_multiple_attachment_parents() -> None:
+    model = ArticulatedObject(name="multiple_parents")
+    root = model.root_piece("root", part_num="3001", color="red")
+    brace = model.attach(
+        "brace",
+        part_num="3005",
+        color="blue",
+        parent=root,
+        parent_connector="stud_0_0",
+        child_connector="antistud_0_0",
+    )
+    child = model.attach(
+        "child",
+        part_num="3003",
+        color="green",
+        parent=root,
+        parent_connector="stud_1_0",
+        child_connector="antistud_0_0",
+    )
+    model.lego_connection(
+        brace,
+        child,
+        parent_connector="stud_0_0",
+        child_connector="antistud_1_1",
+    )
+
+    with pytest.raises(ValidationError, match="multiple attachment parents"):
+        compile_object_to_ldraw_mpd(model, target="buildable")
+
+
+def test_buildable_compile_rejects_parent_after_child_in_step_order() -> None:
+    model = ArticulatedObject(name="forward_reference")
+    root = model.root_piece("root", part_num="3001", color="red")
+    child = model.part("child", part_num="3005", color="blue")
+    parent = model.part("parent", part_num="3005", color="green")
+    model.lego_connection(
+        root,
+        parent,
+        parent_connector="stud_0_0",
+        child_connector="antistud_0_0",
+    )
+    model.lego_connection(
+        parent,
+        child,
+        parent_connector="stud_0_0",
+        child_connector="antistud_0_0",
+    )
+
+    with pytest.raises(ValidationError, match="requires parent"):
+        compile_object_to_ldraw_mpd(model, target="buildable")

@@ -185,6 +185,71 @@ def compile_proxy_object_to_ldraw_mpd(
     return compile_object_to_ldraw_mpd(native_model, target=target, validate=validate)
 
 
+def native_lego_object_to_proxy_object(
+    object_model: NativeLegoObject,
+) -> LegoProxyObject:
+    """Render one catalog-native assembly through ordinary SDK proxy visuals."""
+
+    proxy_model = LegoProxyObject(name=f"{object_model.name}_proxy")
+    proxy_model.meta.update(
+        {
+            "lego_catalog_id": object_model.meta.get("lego_catalog_id"),
+            "lego_catalog_sha256": object_model.meta.get("lego_catalog_sha256"),
+        }
+    )
+    proxy_parts: dict[str, Part] = {}
+    for native_part in object_model.parts:
+        spec = lego_piece_spec(native_part)
+        proxy_parts[native_part.name] = add_lego_proxy_part(
+            proxy_model,
+            native_part.name,
+            part_num=spec.part_num,
+            color=spec.color_id,
+            origin=spec.origin,
+        )
+
+    child_names: set[str] = set()
+    for connection in object_model.lego_connections():
+        if connection.child in child_names:
+            raise ValidationError(
+                f"LEGO proxy URDF requires one parent per piece; "
+                f"piece {connection.child!r} has multiple incoming connections"
+            )
+        child_names.add(connection.child)
+        parent = proxy_parts.get(connection.parent)
+        child = proxy_parts.get(connection.child)
+        if parent is None or child is None:
+            raise ValidationError(
+                f"LEGO connection references missing proxy part: {connection!r}"
+            )
+        _add_fixed_proxy_articulation(proxy_model, parent, child)
+        add_lego_proxy_connection(
+            proxy_model,
+            parent,
+            child,
+            parent_connector=connection.parent_connector,
+            child_connector=connection.child_connector,
+            connection_type=connection.connection_type,
+        )
+    return proxy_model
+
+
+def compile_native_object_to_proxy_urdf_xml(
+    object_model: NativeLegoObject,
+    *,
+    pretty: bool = True,
+) -> str:
+    from sdk.v0._urdf_export import compile_object_to_urdf_xml
+
+    proxy_model = native_lego_object_to_proxy_object(object_model)
+    return compile_object_to_urdf_xml(
+        proxy_model,
+        pretty=pretty,
+        include_physical_collisions=False,
+        validate=True,
+    )
+
+
 def proxy_object_to_native_lego_object(object_model: SdkArticulatedObject) -> NativeLegoObject:
     """Build a catalog-native LEGO object from proxy metadata.
 
