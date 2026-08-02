@@ -174,11 +174,13 @@ def materialization_paths(repo: StorageRepo, record_id: str) -> dict[str, Path]:
     return {
         "root": repo.layout.record_materialization_dir(record_id),
         "model_urdf": repo.layout.record_materialization_urdf_path(record_id),
+        "model_mpd": repo.layout.record_materialization_artifact_path(record_id, "model.mpd"),
         "compile_report_json": repo.layout.record_materialization_compile_report_path(record_id),
         "assets_dir": repo.layout.record_materialization_assets_dir(record_id),
         "meshes_dir": repo.layout.record_materialization_asset_meshes_dir(record_id),
         "glb_dir": repo.layout.record_materialization_asset_glb_dir(record_id),
         "viewer_dir": repo.layout.record_materialization_asset_viewer_dir(record_id),
+        "lego_dir": repo.layout.record_materialization_assets_dir(record_id) / "lego",
     }
 
 
@@ -226,11 +228,31 @@ def summarize_visual_mesh_footprint(mesh_root: Path) -> tuple[int, int]:
     return total_bytes, mesh_files
 
 
+def summarize_ldraw_mesh_footprint(lego_root: Path) -> tuple[int, int]:
+    if not lego_root.exists() or not lego_root.is_dir():
+        return 0, 0
+
+    total_bytes = 0
+    mesh_files = 0
+    for dirpath, _dirnames, filenames in os.walk(lego_root):
+        for filename in filenames:
+            if not filename.lower().endswith((".obj", ".glb", ".gltf")):
+                continue
+            path = Path(dirpath) / filename
+            try:
+                total_bytes += path.stat().st_size
+                mesh_files += 1
+            except OSError:
+                continue
+    return total_bytes, mesh_files
+
+
 def build_materialization_summary(repo: StorageRepo, record_id: str) -> dict[str, Any]:
     paths = materialization_paths(repo, record_id)
     mesh_bytes, mesh_file_count = summarize_visual_mesh_footprint(paths["meshes_dir"])
+    ldraw_mesh_bytes, ldraw_mesh_file_count = summarize_ldraw_mesh_footprint(paths["lego_dir"])
 
-    has_materialized_assets = mesh_file_count > 0
+    has_materialized_assets = mesh_file_count > 0 or ldraw_mesh_file_count > 0
     if not has_materialized_assets:
         has_materialized_assets = _has_nonempty_dir(paths["glb_dir"]) or _has_nonempty_dir(
             paths["viewer_dir"]
@@ -238,6 +260,8 @@ def build_materialization_summary(repo: StorageRepo, record_id: str) -> dict[str
 
     if has_materialized_assets:
         materialization_status: MaterializationStatus = "available"
+    elif paths["model_mpd"].exists():
+        materialization_status = "available"
     elif paths["model_urdf"].exists() and not urdf_references_external_meshes(paths["model_urdf"]):
         materialization_status = "available"
     else:
@@ -247,6 +271,8 @@ def build_materialization_summary(repo: StorageRepo, record_id: str) -> dict[str
         "materialization_status": materialization_status,
         "visual_mesh_bytes": mesh_bytes,
         "visual_mesh_file_count": mesh_file_count,
+        "ldraw_mesh_bytes": ldraw_mesh_bytes,
+        "ldraw_mesh_file_count": ldraw_mesh_file_count,
     }
 
 
@@ -257,6 +283,7 @@ def record_has_materialized_assets(repo: StorageRepo, record_id: str) -> bool:
             repo.layout.record_materialization_asset_meshes_dir(record_id),
             repo.layout.record_materialization_asset_glb_dir(record_id),
             repo.layout.record_materialization_asset_viewer_dir(record_id),
+            repo.layout.record_materialization_assets_dir(record_id) / "lego",
         )
     )
 
@@ -281,5 +308,7 @@ def infer_materialization_status(
 
     urdf_path = repo.layout.record_materialization_urdf_path(record_id)
     if urdf_path.exists() and not urdf_references_external_meshes(urdf_path):
+        return "available"
+    if repo.layout.record_materialization_artifact_path(record_id, "model.mpd").exists():
         return "available"
     return "missing"

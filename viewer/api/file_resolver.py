@@ -78,6 +78,22 @@ class ViewerFileResolver:
         if requested_path.parts == ("model.urdf",):
             root = self.repo.layout.record_materialization_dir(record_id).resolve()
             target = self.repo.layout.record_materialization_urdf_path(record_id).resolve()
+        elif requested_path.parts == ("model.mpd",):
+            root = self.repo.layout.record_materialization_dir(record_id).resolve()
+            target = self.repo.layout.record_materialization_artifact_path(
+                record_id,
+                "model.mpd",
+            ).resolve()
+        elif requested_path.parts == ("model.sidecar.json",):
+            root = self.repo.layout.record_materialization_dir(record_id).resolve()
+            target = (
+                self.repo.layout.record_materialization_artifact_path(
+                    record_id,
+                    "model.mpd",
+                )
+                .with_suffix(".sidecar.json")
+                .resolve()
+            )
         elif requested_path.parts == ("compile_report.json",):
             root = self.repo.layout.record_materialization_dir(record_id).resolve()
             target = self.repo.layout.record_materialization_compile_report_path(
@@ -149,7 +165,7 @@ class ViewerFileResolver:
             needs_forced_rebuild = exc.status_code == 404 and (
                 len(requested_path.parts) >= 2
                 and requested_path.parts[0] == "assets"
-                and requested_path.parts[1] in {"meshes", "glb", "viewer"}
+                and requested_path.parts[1] in {"meshes", "glb", "viewer", "lego"}
             )
             if not needs_forced_rebuild:
                 raise
@@ -362,8 +378,8 @@ class ViewerFileResolver:
 
 def should_attempt_materialize_for_record_path(file_path: str) -> bool:
     requested_path = Path(file_path)
-    if requested_path.parts == ("model.urdf",):
+    if requested_path.parts in {("model.urdf",), ("model.mpd",), ("model.sidecar.json",)}:
         return True
     if len(requested_path.parts) >= 2 and requested_path.parts[0] == "assets":
-        return requested_path.parts[1] in {"meshes", "glb", "viewer"}
+        return requested_path.parts[1] in {"meshes", "glb", "viewer", "lego"}
     return False

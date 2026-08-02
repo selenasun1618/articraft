@@ -58,6 +58,7 @@ packages = [
     "storage",
     "viewer",
     "sdk",
+    "sdk_lego",
 ]
 
 [tool.hatch.build.targets.sdist]

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "catalog_id": "structural_v1",
+  "description": "Initial verified structural LEGO catalog for constrained generation.",
+  "parts": [
+    {"part_num": "3001", "name": "Brick 2 x 4", "ldraw_id": "3001.dat", "nominal_size": [2, 4], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3002", "name": "Brick 2 x 3", "ldraw_id": "3002.dat", "nominal_size": [2, 3], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3003", "name": "Brick 2 x 2", "ldraw_id": "3003.dat", "nominal_size": [2, 2], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3004", "name": "Brick 1 x 2", "ldraw_id": "3004.dat", "nominal_size": [1, 2], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3005", "name": "Brick 1 x 1", "ldraw_id": "3005.dat", "nominal_size": [1, 1], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3010", "name": "Brick 1 x 4", "ldraw_id": "3010.dat", "nominal_size": [1, 4], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3020", "name": "Plate 2 x 4", "ldraw_id": "3020.dat", "nominal_size": [2, 4], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3021", "name": "Plate 2 x 3", "ldraw_id": "3021.dat", "nominal_size": [2, 3], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3022", "name": "Plate 2 x 2", "ldraw_id": "3022.dat", "nominal_size": [2, 2], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3023", "name": "Plate 1 x 2", "ldraw_id": "3023.dat", "nominal_size": [1, 2], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3024", "name": "Plate 1 x 1", "ldraw_id": "3024.dat", "nominal_size": [1, 1], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3034", "name": "Plate 2 x 8", "ldraw_id": "3034.dat", "nominal_size": [2, 8], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3622", "name": "Brick 1 x 3", "ldraw_id": "3622.dat", "nominal_size": [1, 3], "height_ldu": 24, "geometry": "rectangular"},
+    {"part_num": "3710", "name": "Plate 1 x 4", "ldraw_id": "3710.dat", "nominal_size": [1, 4], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3795", "name": "Plate 2 x 6", "ldraw_id": "3795.dat", "nominal_size": [2, 6], "height_ldu": 8, "geometry": "rectangular"},
+    {"part_num": "3062b", "name": "Brick Round 1 x 1 Open Stud", "ldraw_id": "3062b.dat", "nominal_size": [1, 1], "height_ldu": 24, "geometry": "round"}
+  ],
+  "allowed_ldraw_color_ids": [0, 1, 2, 4, 5, 12, 13, 14, 15, 29, 71, 72, 353]
+}

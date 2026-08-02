@@ -473,8 +473,12 @@ async def execute_single_run(
         if logged_cost is not None:
             logger.info("Total cost: $%.6f", logged_cost)
 
-    if result.urdf_xml is not None:
-        urdf_xml = result.urdf_xml
+    compile_artifact_format = getattr(result, "compile_artifact_format", "urdf") or "urdf"
+    compile_artifact_filename = getattr(result, "compile_artifact_filename", "model.urdf") or "model.urdf"
+    compile_sidecar_json = getattr(result, "compile_sidecar_json", None)
+    result_output_text = getattr(result, "compile_output_text", None) or result.urdf_xml
+    if result_output_text is not None:
+        compile_output_text = result_output_text
         compile_warnings = list(result.compile_warnings)
     else:
         try:
@@ -486,7 +490,10 @@ async def execute_single_run(
                 )
             for warning in report.warnings:
                 logger.warning("%s", warning)
-            urdf_xml = report.urdf_xml
+            compile_output_text = report.output_text
+            compile_artifact_format = report.artifact_format
+            compile_artifact_filename = report.artifact_filename
+            compile_sidecar_json = report.sidecar_json
             compile_warnings = list(report.warnings)
         except Exception as exc:
             logger.error("Failed to compile URDF: %s", exc)
@@ -548,7 +555,10 @@ async def execute_single_run(
             openai_reasoning_summary=openai_reasoning_summary,
             max_cost_usd=max_cost_usd,
             final_code=final_code,
-            urdf_xml=urdf_xml,
+            urdf_xml=compile_output_text,
+            artifact_format=compile_artifact_format,
+            artifact_filename=compile_artifact_filename,
+            sidecar_json=compile_sidecar_json,
             compile_warnings=compile_warnings,
             turn_count=result.turn_count,
             tool_call_count=result.tool_call_count,

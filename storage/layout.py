@@ -153,6 +153,14 @@ class StorageLayout:
     def record_materialization_urdf_path(self, record_id: str) -> Path:
         return self.record_materialization_dir(record_id) / "model.urdf"
 
+    def record_materialization_artifact_path(
+        self,
+        record_id: str,
+        artifact_filename: str = "model.urdf",
+    ) -> Path:
+        safe_name = Path(str(artifact_filename)).name
+        return self.record_materialization_dir(record_id) / safe_name
+
     def record_materialization_compile_report_path(self, record_id: str) -> Path:
         return self.record_materialization_dir(record_id) / "compile_report.json"
 

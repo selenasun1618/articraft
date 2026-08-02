@@ -30,6 +30,18 @@ from viewer.api.store_types import MaterializeRecordAssetsResult
 from viewer.api.store_values import _normalize_sdk_package_value
 
 
+def _artifact_filename_for_sdk(sdk_package: str | None) -> str:
+    return (
+        "model.mpd"
+        if str(sdk_package or "").strip().lower() in {"lego", "sdk_lego"}
+        else "model.urdf"
+    )
+
+
+def _artifact_format_for_filename(filename: str) -> str:
+    return "ldraw-mpd" if filename.lower().endswith(".mpd") else "urdf"
+
+
 class ViewerMaterializationStore(ViewerStoreComponent):
     def _record_compile_lock(self, record_id: str) -> threading.Lock:
         with self._compile_locks_guard:
@@ -44,9 +56,14 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         record_id: str,
         record: dict[str, Any] | None = None,
     ) -> tuple[Path, Path, Path]:
+        artifact_filename = _artifact_filename_for_sdk(
+            _normalize_sdk_package_value(record.get("sdk_package"))
+            if isinstance(record, dict)
+            else None
+        )
         return (
             active_model_path(self.repo, record_id, record=record),
-            self.repo.layout.record_materialization_urdf_path(record_id),
+            self.repo.layout.record_materialization_artifact_path(record_id, artifact_filename),
             self.repo.layout.record_materialization_compile_report_path(record_id),
         )
 
@@ -61,11 +78,13 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         return _latest_path_mtime_to_utc(
             [
                 layout.record_materialization_urdf_path(record_id),
+                layout.record_materialization_artifact_path(record_id, "model.mpd"),
                 layout.record_materialization_compile_report_path(record_id),
                 layout.record_materialization_assets_dir(record_id),
                 layout.record_materialization_asset_meshes_dir(record_id),
                 layout.record_materialization_asset_glb_dir(record_id),
                 layout.record_materialization_asset_viewer_dir(record_id),
+                layout.record_materialization_assets_dir(record_id) / "lego",
             ]
         )
 
@@ -75,19 +94,22 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         *,
         record_dir: Path,
         model_dir: Path,
-        urdf_path: Path,
+        artifact_path: Path,
         compile_path: Path,
     ) -> None:
         for path in (
-            urdf_path,
+            artifact_path,
             compile_path,
             record_dir / "model.urdf",
+            record_dir / "model.mpd",
+            record_dir / "model.sidecar.json",
             record_dir / "compile_report.json",
             record_dir / "assets",
             model_dir / "assets",
             self.repo.layout.record_materialization_asset_meshes_dir(record_id),
             self.repo.layout.record_materialization_asset_glb_dir(record_id),
             self.repo.layout.record_materialization_asset_viewer_dir(record_id),
+            self.repo.layout.record_materialization_assets_dir(record_id) / "lego",
         ):
             _remove_path_if_exists(path)
 
@@ -99,6 +121,8 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         model_dir: Path,
     ) -> None:
         _remove_path_if_exists(record_dir / "model.urdf")
+        _remove_path_if_exists(record_dir / "model.mpd")
+        _remove_path_if_exists(record_dir / "model.sidecar.json")
         _remove_path_if_exists(record_dir / "compile_report.json")
         _remove_path_if_exists(self.repo.layout.record_materialization_assets_dir(record_id))
         _replace_tree_from_source(
@@ -113,6 +137,10 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             model_dir / "assets" / "viewer",
             self.repo.layout.record_materialization_asset_viewer_dir(record_id),
         )
+        _replace_tree_from_source(
+            model_dir / "assets" / "lego",
+            self.repo.layout.record_materialization_assets_dir(record_id) / "lego",
+        )
         _remove_path_if_exists(model_dir / "assets")
         _remove_path_if_exists(record_dir / "assets")
 
@@ -121,6 +149,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         *,
         record_id: str,
         compile_path: Path,
+        artifact_path: Path,
         status: str,
         warnings: list[str],
         compile_level: str,
@@ -150,11 +179,15 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             metrics.update(materialization_summary)
         if compile_elapsed_seconds is not None:
             metrics["compile_elapsed_seconds"] = float(max(compile_elapsed_seconds, 0.0))
+        artifact_filename = artifact_path.name
+        artifact_format = _artifact_format_for_filename(artifact_filename)
         report = StorageCompileReport(
             schema_version=1,
             record_id=record_id,
             status=status,
-            urdf_path="model.urdf",
+            urdf_path="model.urdf" if artifact_format == "urdf" else artifact_filename,
+            artifact_path=artifact_filename,
+            artifact_format=artifact_format,
             warnings=[CompileWarning(code="warning", message=warning) for warning in warnings],
             checks_run=list(checks_run or ["compile_urdf"]),
             metrics=metrics,
@@ -172,13 +205,13 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         target: str = "full",
         use_compile_timeout: bool = False,
     ) -> MaterializeRecordAssetsResult:
-        if target not in {"full", "visual"}:
+        if target not in {"full", "visual", "buildable", "strict"}:
             raise ValueError(f"Unsupported materialization target: {target!r}")
         record = self.record_store.load_record(record_id)
         if not isinstance(record, dict):
             raise FileNotFoundError(f"Record not found: {record_id}")
 
-        model_path, urdf_path, compile_path = self._record_compile_paths(
+        model_path, artifact_path, compile_path = self._record_compile_paths(
             record_id,
             record,
         )
@@ -195,7 +228,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
         )
         materialization_status = self._materialization_status_for_record(record_id)
         if (
-            urdf_path.exists()
+            artifact_path.exists()
             and not force
             and _compile_report_satisfies_target(compile_report, target=target)
             and current_fingerprint is not None
@@ -222,7 +255,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             if not isinstance(refreshed_record, dict):
                 raise FileNotFoundError(f"Record not found: {record_id}")
 
-            model_path, urdf_path, compile_path = self._record_compile_paths(
+            model_path, artifact_path, compile_path = self._record_compile_paths(
                 record_id,
                 refreshed_record,
             )
@@ -242,7 +275,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             )
             materialization_status = self._materialization_status_for_record(record_id)
             if (
-                urdf_path.exists()
+                artifact_path.exists()
                 and not force
                 and _compile_report_satisfies_target(compile_report, target=target)
                 and _compile_report_matches_fingerprint(
@@ -265,7 +298,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
                     record_id,
                     record_dir=record_dir,
                     model_dir=model_path.parent,
-                    urdf_path=urdf_path,
+                    artifact_path=artifact_path,
                     compile_path=compile_path,
                 )
 
@@ -276,11 +309,16 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             )
 
             sdk_package = _normalize_sdk_package_value(refreshed_record.get("sdk_package")) or "sdk"
-            run_checks = bool(validate and target == "full")
-            validation_level = "full" if run_checks else "none"
+            is_lego = sdk_package in {"lego", "sdk_lego"}
+            run_checks = bool(
+                (validate and target == "full") or (is_lego and target in {"buildable", "strict"})
+            )
+            validation_level = target if is_lego else ("full" if run_checks else "none")
             checks_run = (
                 ["compile_visual"]
                 if target == "visual"
+                else ["compile_ldraw"]
+                if is_lego
                 else ["compile_urdf"]
                 if run_checks
                 else ["compile_urdf_fast"]
@@ -295,7 +333,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
                     sdk_package=sdk_package,
                     ignore_geom_qc=ignore_geom_qc if run_checks else False,
                     run_checks=run_checks,
-                    target="visual" if target == "visual" else "full",
+                    target=target if is_lego else ("visual" if target == "visual" else "full"),
                 )
             except Exception as exc:
                 compile_elapsed_seconds = time.perf_counter() - compile_started_at
@@ -309,6 +347,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
                 self._write_compile_report(
                     record_id=record_id,
                     compile_path=compile_path,
+                    artifact_path=artifact_path,
                     status="failure",
                     warnings=warning_lines,
                     compile_level=target,
@@ -323,7 +362,13 @@ class ViewerMaterializationStore(ViewerStoreComponent):
                 raise RuntimeError(f"Failed to compile assets for {record_id}: {exc}") from exc
 
             compile_elapsed_seconds = time.perf_counter() - compile_started_at
-            self.repo.write_text(urdf_path, compile_result.urdf_xml)
+            compile_output_text = getattr(compile_result, "output_text", None)
+            if not isinstance(compile_output_text, str):
+                compile_output_text = str(getattr(compile_result, "urdf_xml"))
+            self.repo.write_text(artifact_path, compile_output_text)
+            sidecar_json = getattr(compile_result, "sidecar_json", None)
+            if sidecar_json is not None:
+                self.repo.write_json(artifact_path.with_suffix(".sidecar.json"), sidecar_json)
             self._promote_local_materialization_outputs(
                 record_id,
                 record_dir=record_dir,
@@ -340,6 +385,7 @@ class ViewerMaterializationStore(ViewerStoreComponent):
             self._write_compile_report(
                 record_id=record_id,
                 compile_path=compile_path,
+                artifact_path=artifact_path,
                 status="success",
                 warnings=warning_lines,
                 compile_level=target,

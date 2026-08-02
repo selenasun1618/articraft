@@ -25,7 +25,8 @@ from sdk._core.v0.assets import activate_asset_session, asset_session_for_script
 
 logger = logging.getLogger(__name__)
 
-_COMPILE_TARGETS = {"full", "visual"}
+_COMPILE_TARGETS = {"full", "visual", "buildable", "strict"}
+_LEGO_SDK_PACKAGES = {"lego", "sdk_lego"}
 
 _EXCEPTION_PREFIX_RE = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*(?:Error|Exception)):\s*")
 _VISUAL_OBJ_MESH_RE = re.compile(
@@ -107,6 +108,17 @@ def _normalize_compile_target(target: str) -> str:
     if target_key not in _COMPILE_TARGETS:
         supported = ", ".join(sorted(_COMPILE_TARGETS))
         raise ValueError(f"Unsupported compile target {target!r}. Expected one of: {supported}")
+    return target_key
+
+
+def _is_lego_sdk_package(sdk_package: str) -> bool:
+    return str(sdk_package or "").strip().lower() in _LEGO_SDK_PACKAGES
+
+
+def _normalize_lego_compile_target(target: str) -> str:
+    target_key = _normalize_compile_target(target)
+    if target_key == "full":
+        return "buildable"
     return target_key
 
 
@@ -215,6 +227,13 @@ def compile_urdf_report(
     target: str = "full",
     rewrite_visual_glb: bool | None = None,
 ) -> CompileReport:
+    if _is_lego_sdk_package(sdk_package):
+        return compile_ldraw_report(
+            script_path,
+            sdk_package=sdk_package,
+            run_checks=run_checks,
+            target=target,
+        )
     session = asset_session_for_script(script_path)
     with activate_asset_session(session):
         return _compile_urdf_report_impl(
@@ -225,6 +244,56 @@ def compile_urdf_report(
             target=target,
             rewrite_visual_glb=rewrite_visual_glb,
         )
+
+
+def compile_ldraw_report(
+    script_path: Path,
+    *,
+    sdk_package: str = "sdk_lego",
+    run_checks: bool = True,
+    target: str = "buildable",
+) -> CompileReport:
+    globals_dict = load_model_globals(script_path, sdk_package=sdk_package)
+    object_model = globals_dict.get("object_model")
+    if object_model is None:
+        raise ValueError("object_model must be defined for LEGO LDraw compile")
+    compile_object_to_ldraw_mpd = getattr(
+        _import_sdk_module(sdk_package, ".ldraw_export"),
+        "compile_object_to_ldraw_mpd",
+    )
+    export = compile_object_to_ldraw_mpd(
+        object_model,
+        target=_normalize_lego_compile_target(target),
+        validate=run_checks,
+    )
+    warnings = [str(warning) for warning in getattr(export, "warnings", [])]
+    sidecar_json = getattr(export, "sidecar_json", None)
+    if isinstance(sidecar_json, dict):
+        sidecar_json = dict(sidecar_json)
+    try:
+        materialize_ldraw_mpd_to_obj = getattr(
+            _import_sdk_module(sdk_package, ".ldraw_materialize"),
+            "materialize_ldraw_mpd_to_obj",
+        )
+        script_root = script_path.resolve().parent
+        output_path = script_root / "assets" / "lego" / "model.obj"
+        materialized = materialize_ldraw_mpd_to_obj(
+            str(getattr(export, "mpd_text")),
+            output_path=output_path,
+        )
+        if isinstance(sidecar_json, dict):
+            sidecar_json["render_mesh"] = materialized.to_sidecar(asset_root=script_root)
+    except Exception as exc:
+        warnings.append(f"LDraw mesh materialization warning: {exc}")
+    signal_bundle = build_compile_signal_bundle(status="success", warnings=warnings)
+    return CompileReport(
+        urdf_xml=str(getattr(export, "mpd_text")),
+        warnings=warnings,
+        signal_bundle=signal_bundle,
+        artifact_format="ldraw-mpd",
+        artifact_filename="model.mpd",
+        sidecar_json=sidecar_json if isinstance(sidecar_json, dict) else None,
+    )
 
 
 def _compile_urdf_report_impl(
@@ -589,6 +658,10 @@ def _compile_worker(
         payload = {
             "ok": True,
             "urdf_xml": report.urdf_xml,
+            "output_text": report.output_text,
+            "artifact_format": report.artifact_format,
+            "artifact_filename": report.artifact_filename,
+            "sidecar_json": report.sidecar_json,
             "warnings": report.warnings,
             "signal_bundle": report.signal_bundle.to_dict(),
         }
@@ -689,10 +762,16 @@ def compile_urdf_report_maybe_timeout(
         )
     if msg.get("ok") is True:
         urdf_xml = msg.get("urdf_xml")
+        output_text = msg.get("output_text")
+        artifact_format = msg.get("artifact_format")
+        artifact_filename = msg.get("artifact_filename")
+        sidecar_json = msg.get("sidecar_json")
         warnings = msg.get("warnings")
         signal_bundle_payload = msg.get("signal_bundle")
+        if not isinstance(urdf_xml, str) and isinstance(output_text, str):
+            urdf_xml = output_text
         if not isinstance(urdf_xml, str):
-            raise RuntimeError("URDF compile failed: missing urdf_xml from worker")
+            raise RuntimeError("Compile failed: missing output text from worker")
         if not isinstance(warnings, list):
             warnings = []
         if isinstance(signal_bundle_payload, dict):
@@ -703,6 +782,11 @@ def compile_urdf_report_maybe_timeout(
             urdf_xml=urdf_xml,
             warnings=[str(w) for w in warnings],
             signal_bundle=signal_bundle,
+            artifact_format=str(artifact_format) if isinstance(artifact_format, str) else "urdf",
+            artifact_filename=(
+                str(artifact_filename) if isinstance(artifact_filename, str) else "model.urdf"
+            ),
+            sidecar_json=sidecar_json if isinstance(sidecar_json, dict) else None,
         )
 
     error_text = str(msg.get("error", "Unknown compile worker error")).strip()
